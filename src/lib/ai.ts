@@ -1,10 +1,16 @@
 import Anthropic from '@anthropic-ai/sdk'
 
+// 支持 LongCat API（美团，Anthropic 兼容格式， generous free tier）
+// 也兼容原生 Anthropic API（通过环境变量切换）
+const API_KEY = process.env.LONGCAT_API_KEY || process.env.ANTHROPIC_API_KEY || ''
+const BASE_URL = process.env.AI_BASE_URL || 'https://api.longcat.chat/anthropic'
+
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || '',
+  apiKey: API_KEY,
+  baseURL: BASE_URL,
 })
 
-const MODEL = process.env.AI_MODEL || 'claude-3-5-sonnet-20241022'
+const MODEL = process.env.AI_MODEL || 'LongCat-Flash-Lite'
 
 export interface AIProcessResult {
   category: string
