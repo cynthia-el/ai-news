@@ -49,7 +49,21 @@ export function dedupItems(items: RawItem[]): DedupResult {
 
   for (const item of items) {
     // 1. URL精确去重
-    const urlKey = item.url.split('?')[0].replace(/#.*$/, '').replace(/\/+$/, '')
+    // 对跳转链接（如搜狗 /link?url=xxx）保留完整URL，普通链接去掉追踪参数
+    let urlKey: string
+    try {
+      const urlObj = new URL(item.url)
+      const isRedirectLink =
+        urlObj.searchParams.has('url') ||
+        urlObj.searchParams.has('link') ||
+        urlObj.searchParams.has('u') ||
+        urlObj.pathname.length <= 10
+      urlKey = isRedirectLink
+        ? item.url.replace(/#.*$/, '').replace(/\/+$/, '')
+        : item.url.split('?')[0].replace(/#.*$/, '').replace(/\/+$/, '')
+    } catch {
+      urlKey = item.url.split('?')[0].replace(/#.*$/, '').replace(/\/+$/, '')
+    }
     if (seenUrls.has(urlKey)) {
       const origIdx = unique.findIndex((u) => u.url.split('?')[0].replace(/#.*$/, '').replace(/\/+$/, '') === urlKey)
       duplicates.push({ item, originalIndex: origIdx >= 0 ? origIdx : 0 })

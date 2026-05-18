@@ -1,15 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk'
-
-// 支持 LongCat API（美团，Anthropic 兼容格式， generous free tier）
-// 也兼容原生 Anthropic API（通过环境变量切换）
 const API_KEY = process.env.LONGCAT_API_KEY || process.env.ANTHROPIC_API_KEY || ''
 const BASE_URL = process.env.AI_BASE_URL || 'https://api.longcat.chat/anthropic'
-
-const anthropic = new Anthropic({
-  apiKey: API_KEY,
-  baseURL: BASE_URL,
-})
-
 const MODEL = process.env.AI_MODEL || 'LongCat-Flash-Lite'
 
 export interface AIProcessResult {
@@ -59,8 +49,35 @@ const CATEGORY_LABELS: Record<string, string> = {
   tips: '实用技巧',
 }
 
+// 直接调用 LongCat API（绕过 Anthropic SDK，因为 SDK 用 x-api-key header，LongCat 不认）
+async function callLongCat(systemPrompt: string, userPrompt: string, maxTokens = 2000): Promise<string> {
+  const response = await fetch(`${BASE_URL}/v1/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${API_KEY}`,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`LongCat API ${response.status}: ${errorText}`)
+  }
+
+  const data = await response.json()
+  const text = data.content?.[0]?.text || ''
+  return text
+}
+
 // ============================================================
-// 1. 批量分类评分（核心优化：降低API调用次数）
+// 1. 批量分类评分
 // ============================================================
 
 export async function batchClassify(
@@ -106,35 +123,18 @@ category说明：
 tags: 提取2-4个关键词标签，帮助检索和归类。`
 
   try {
-    const response = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 2000,
-      messages: [{ role: 'user', content: prompt }],
-    })
-
-    const text =
-      response.content[0].type === 'text'
-        ? response.content[0].text
-        : '[]'
-
+    const text = await callLongCat('', prompt, 2000)
     const jsonMatch = text.match(/\[[\s\S]*\]/)
-    if (!jsonMatch) {
-      throw new Error('AI 返回格式错误')
-    }
+    if (!jsonMatch) throw new Error('AI 返回格式错误')
 
     const results: BatchAIResult[] = JSON.parse(jsonMatch[0])
 
-    // 验证并修正每个结果
     return results.map((r, idx) => {
       let category = r.category?.toLowerCase().trim() || 'industry-news'
-      if (!VALID_CATEGORIES.includes(category)) {
-        category = 'industry-news'
-      }
+      if (!VALID_CATEGORIES.includes(category)) category = 'industry-news'
 
       let score = parseFloat(String(r.score))
-      if (isNaN(score) || score < 1 || score > 10) {
-        score = 5
-      }
+      if (isNaN(score) || score < 1 || score > 10) score = 5
 
       const tags = Array.isArray(r.tags)
         ? r.tags.map((t) => String(t).trim()).filter(Boolean).slice(0, 4)
@@ -150,7 +150,6 @@ tags: 提取2-4个关键词标签，帮助检索和归类。`
     })
   } catch (error) {
     console.error('批量AI处理失败:', error)
-    // 全部返回默认值
     return items.map((_, idx) => ({
       index: idx + 1,
       category: 'industry-news',
@@ -162,7 +161,7 @@ tags: 提取2-4个关键词标签，帮助检索和归类。`
 }
 
 // ============================================================
-// 2. 深度推荐理由生成（只对高分条目）
+// 2. 深度推荐理由生成
 // ============================================================
 
 export async function generateDeepReasons(
@@ -191,24 +190,11 @@ ${itemsText}
 - 不要加引号，直接输出文字`
 
   try {
-    const response = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 2000,
-      messages: [{ role: 'user', content: prompt }],
-    })
-
-    const text =
-      response.content[0].type === 'text'
-        ? response.content[0].text
-        : '[]'
-
+    const text = await callLongCat('', prompt, 2000)
     const jsonMatch = text.match(/\[[\s\S]*\]/)
-    if (!jsonMatch) {
-      throw new Error('AI 返回格式错误')
-    }
+    if (!jsonMatch) throw new Error('AI 返回格式错误')
 
     const results: { index: number; reason: string }[] = JSON.parse(jsonMatch[0])
-
     return items.map((_, idx) => {
       const found = results.find((r) => r.index === idx + 1)
       return found?.reason?.slice(0, 80) || '行业相关资讯，值得关注'
@@ -265,25 +251,12 @@ ${itemsText}
 - title 要简洁有力，像报纸头版`
 
   try {
-    const response = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 1500,
-      messages: [{ role: 'user', content: prompt }],
-    })
-
-    const text =
-      response.content[0].type === 'text'
-        ? response.content[0].text
-        : '{}'
-
+    const text = await callLongCat('', prompt, 1500)
     const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      throw new Error('AI 返回格式错误')
-    }
+    if (!jsonMatch) throw new Error('AI 返回格式错误')
 
     const result = JSON.parse(jsonMatch[0])
 
-    // 验证并修正 sections
     const sections: DailySectionPlan[] = []
     if (Array.isArray(result.sections)) {
       for (const s of result.sections) {
@@ -336,7 +309,6 @@ export async function processItem(
     }
   }
 
-  // 对高分条目生成深度推荐理由
   let reason = '行业相关资讯'
   if (result.score >= 7) {
     const reasons = await generateDeepReasons([

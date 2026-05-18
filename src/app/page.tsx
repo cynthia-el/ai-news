@@ -78,20 +78,19 @@ export default function Home() {
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
-      {/* Hero */}
-      <div className="mb-8">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="px-3 py-1 text-xs font-semibold rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100">
-            AI 智能筛选
-          </span>
-          <span className="text-xs text-slate-400">{new Date().toLocaleDateString('zh-CN')} · 实时更新</span>
+      {/* Header */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-bold text-slate-900">
+              {mode === 'selected' ? '精选资讯' : '全部资讯'}
+            </h1>
+            <span className="px-2.5 py-0.5 text-xs font-medium rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100">
+              AI 智能筛选
+            </span>
+          </div>
+          <span className="text-xs text-slate-400">{new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })} · 实时更新</span>
         </div>
-        <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">
-          家居建材行业热点
-        </h1>
-        <p className="text-slate-500 max-w-xl mb-6">
-          聚合行业媒体、政策发布、新品动态等资讯，AI 自动分类、评分与精选，助你快速把握市场脉搏
-        </p>
         <SearchBar value={q} onChange={setQ} onSubmit={handleSearch} />
       </div>
 
