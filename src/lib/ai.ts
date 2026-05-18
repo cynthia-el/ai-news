@@ -173,20 +173,21 @@ export async function generateDeepReasons(
     .map((item, i) => `${i + 1}. [${CATEGORY_LABELS[item.category] || item.category}] ${item.title}\n   摘要：${item.summary}`)
     .join('\n\n')
 
-  const prompt = `你是一位家居建材行业分析师。请为以下 ${items.length} 条精选资讯分别生成"推荐理由"，说明为什么从业者应该关注。
+  const prompt = `你是一位家居建材行业资深分析师。请为以下 ${items.length} 条精选资讯分别生成"AI精选解读"，对资讯的核心价值进行深入分析解读。
 
 资讯列表：
 ${itemsText}
 
-请严格按照以下JSON数组格式输出，每条理由50字以内，直接、专业、有洞察：
+请严格按照以下JSON数组格式输出，每条解读80-100字，分析该资讯对行业从业者的实际价值、影响或启示：
 [
-  { "index": 1, "reason": "推荐理由..." },
-  { "index": 2, "reason": "推荐理由..." }
+  { "index": 1, "reason": "解读内容..." },
+  { "index": 2, "reason": "解读内容..." }
 ]
 
 要求：
-- 不要泛泛而谈，要指出具体的价值点（如：影响采购决策、预示价格走势、涉及合规要求等）
-- 语言简洁有力，像行业专家给同事的推荐
+- 不要泛泛而谈，要指出具体的价值点（如：影响采购决策、预示价格走势、涉及合规要求、技术趋势判断等）
+- 分析要专业、有洞察，像行业专家给同事的点评
+- 80-100字，简洁有力
 - 不要加引号，直接输出文字`
 
   try {
@@ -197,7 +198,7 @@ ${itemsText}
     const results: { index: number; reason: string }[] = JSON.parse(jsonMatch[0])
     return items.map((_, idx) => {
       const found = results.find((r) => r.index === idx + 1)
-      return found?.reason?.slice(0, 80) || '行业相关资讯，值得关注'
+      return found?.reason?.slice(0, 100) || '行业相关资讯，值得关注'
     })
   } catch (error) {
     console.error('推荐理由生成失败:', error)
