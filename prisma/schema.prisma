@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Source {
+  id            String    @id @default(cuid())
+  name          String
+  type          String    // WEB, RSS, API, WECHAT_RSS, MANUAL
+  url           String
+  config        String?   @db.Text
+  category      String?   // 默认分类
+  isActive      Boolean   @default(true)
+  priority      Int       @default(0)
+  lastCrawledAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  items Item[]
+
+  @@index([isActive])
+  @@index([type])
+}
+
+model Item {
+  id            String   @id @default(cuid())
+  title         String
+  url           String   @unique
+  source        String   // 信源名称（冗余存储，方便查询）
+  sourceId      String?  // 关联 Source 表
+  category      String
+  summary       String?
+  reason        String?
+  content       String?  @db.Text
+  score         Float    @default(0)
+  imageUrl      String?
+  publishedAt   DateTime
+  createdAt     DateTime @default(now())
+  isSelected    Boolean  @default(false)
+  tags          String[]
+  duplicateOfId String?  // 指向原始条目，用于去重追踪
+
+  sourceRef Source? @relation(fields: [sourceId], references: [id])
+
+  @@index([category])
+  @@index([publishedAt])
+  @@index([isSelected, publishedAt])
+  @@index([source])
+  @@index([sourceId])
+  @@index([score])
+}
+
+model Daily {
+  id           String   @id @default(cuid())
+  date         String   @unique
+  title        String
+  summary      String   @db.Text
+  editorNote   String?  @db.Text
+  itemIds      String[]
+  sectionCount Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  sections DailySection[]
+}
+
+model DailySection {
+  id          String   @id @default(cuid())
+  dailyId     String
+  category    String
+  title       String
+  description String?  @db.Text
+  itemIds     String[]
+  order       Int      @default(0)
+
+  daily Daily @relation(fields: [dailyId], references: [id], onDelete: Cascade)
+
+  @@index([dailyId])
+}
+
+model CrawlLog {
+  id             String   @id @default(cuid())
+  startedAt      DateTime @default(now())
+  endedAt        DateTime?
+  status         String   @default("running")
+  totalFetched   Int      @default(0)
+  added          Int      @default(0)
+  skipped        Int      @default(0)
+  failed         Int      @default(0)
+  sources        String[] @default([])
+  sourceStats    String?  @db.Text // JSON: { sourceName: { fetched, added, failed } }
+  errorMessage   String?
+  dailyGenerated Boolean  @default(false)
+
+  @@index([startedAt])
+  @@index([status])
+}
