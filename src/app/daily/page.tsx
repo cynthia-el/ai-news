@@ -172,7 +172,7 @@ export default function DailyPage() {
               ) : daily.items?.length > 0 ? (
                 <div className="grid gap-3">
                   {daily.items.map((item) => (
-                    <ItemCard key={item.id} item={item} compact />
+                    <ItemCard key={item.id} item={item} />
                   ))}
                 </div>
               ) : (

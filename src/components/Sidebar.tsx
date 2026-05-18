@@ -16,7 +16,7 @@ export function Sidebar() {
       {/* Logo */}
       <div className="h-16 flex items-center px-5 border-b border-slate-100">
         <a href="/" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-sm font-bold">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-indigo-200/50">
             AI
           </div>
           <span className="text-sm font-bold text-slate-900 tracking-tight">
@@ -26,7 +26,7 @@ export function Sidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-5 space-y-1">
         {navItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href))
           return (
@@ -35,7 +35,7 @@ export function Sidebar() {
               href={item.href}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${
                 isActive
-                  ? 'bg-indigo-50 text-indigo-600'
+                  ? 'bg-gradient-to-r from-indigo-50 to-violet-50 text-indigo-600 shadow-sm shadow-indigo-100/50'
                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >

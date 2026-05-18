@@ -50,7 +50,7 @@ export function DailySection({ section }: DailySectionProps) {
       {/* Items */}
       <div className="grid gap-3">
         {section.items.map((item) => (
-          <ItemCard key={item.id} item={item} compact />
+          <ItemCard key={item.id} item={item} />
         ))}
       </div>
     </div>
