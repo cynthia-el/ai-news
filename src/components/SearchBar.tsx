@@ -12,10 +12,10 @@ export function SearchBar({ value, onChange, onSubmit, placeholder = '搜索关�
         e.preventDefault()
         onSubmit()
       }}
-      className="relative w-full max-w-xl"
+      className="relative w-full max-w-md"
     >
       <svg
-        className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"
+        className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"
@@ -32,15 +32,15 @@ export function SearchBar({ value, onChange, onSubmit, placeholder = '搜索关�
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full pl-12 pr-4 py-3 text-sm bg-white border border-slate-200 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition"
+        className="w-full pl-9 pr-8 py-2 text-[13px] bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400 transition"
       />
       {value && (
         <button
           type="button"
           onClick={() => onChange('')}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>

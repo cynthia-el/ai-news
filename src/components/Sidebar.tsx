@@ -12,41 +12,36 @@ export function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-56 bg-white/80 backdrop-blur-xl border-r border-emerald-100/40 flex flex-col z-50">
+    <aside className="fixed left-0 top-0 h-full w-52 bg-slate-50 border-r border-slate-200 flex flex-col z-50">
       {/* Logo */}
-      <div className="h-16 flex items-center px-5 border-b border-emerald-50">
-        <a href="/" className="flex items-center gap-2.5 group">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white shadow-lg shadow-emerald-200/50">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <div className="h-14 flex items-center px-5 border-b border-slate-200">
+        <a href="/" className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-md bg-slate-900 flex items-center justify-center">
+            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
             </svg>
           </div>
-          <div className="flex flex-col">
-            <span className="text-[15px] font-black text-slate-800 tracking-tight leading-none">
-              家居建材
-            </span>
-            <span className="text-[10px] font-bold text-emerald-600 tracking-[0.15em] uppercase leading-tight mt-0.5">
-              行业资讯
-            </span>
-          </div>
+          <span className="text-sm font-semibold text-slate-900 tracking-tight">
+            家居建材资讯
+          </span>
         </a>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-5 space-y-1">
+      <nav className="flex-1 px-2.5 py-4 space-y-0.5">
         {navItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href))
           return (
             <a
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition ${
                 isActive
-                  ? 'bg-emerald-50 text-emerald-700 shadow-sm shadow-emerald-100/50'
-                  : 'text-slate-600 hover:bg-emerald-50/50 hover:text-emerald-700'
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
-              <item.icon className={`w-5 h-5 ${isActive ? 'text-emerald-500' : 'text-slate-400'}`} />
+              <item.icon className={`w-4 h-4 ${isActive ? 'text-slate-300' : 'text-slate-400'}`} />
               {item.label}
             </a>
           )
@@ -54,12 +49,9 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-5 py-4 border-t border-emerald-50">
-        <p className="text-[11px] text-emerald-600/60 leading-relaxed">
+      <div className="px-5 py-3 border-t border-slate-200">
+        <p className="text-[11px] text-slate-400">
           智能采集 · 深度解读
-        </p>
-        <p className="text-[11px] text-slate-300 mt-0.5">
-          {new Date().getFullYear()} · 家居建材资讯
         </p>
       </div>
     </aside>

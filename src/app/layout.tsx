@@ -28,13 +28,13 @@ export default function RootLayout({
       lang="zh-CN"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex bg-emerald-50/30">
+      <body className="min-h-full flex bg-white">
         <Sidebar />
-        <div className="flex-1 flex flex-col ml-56">
+        <div className="flex-1 flex flex-col ml-52">
           <main className="flex-1">{children}</main>
-          <footer className="border-t border-emerald-100/40 bg-white/40 backdrop-blur">
-            <div className="max-w-5xl mx-auto px-6 py-6 flex items-center justify-between">
-              <div className="text-xs text-slate-400">
+          <footer className="border-t border-slate-100">
+            <div className="max-w-5xl mx-auto px-6 py-5 flex items-center justify-between">
+              <div className="text-[11px] text-slate-400">
                 家居建材资讯 · 智能行业信息聚合平台
               </div>
             </div>
