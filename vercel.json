@@ -1,10 +1,5 @@
 {
-  "buildCommand": "prisma generate && prisma migrate deploy && next build",
-  "framework": "nextjs",
-  "crons": [
-    {
-      "path": "/api/cron/sync",
-      "schedule": "0 2 * * *"
-    }
-  ]
+  "buildCommand": "prisma generate && prisma db push && prisma db seed && next build",
+  "outputDirectory": ".next",
+  "framework": null
 }
