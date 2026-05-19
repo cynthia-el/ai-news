@@ -124,8 +124,8 @@ export class WebAdapter implements SourceAdapter {
         if (title && link) {
           // 过滤导航页/非文章
           const titleClean = title.trim()
-          if (titleClean.length < 5) continue
-          if (NAV_BLACKLIST.some(kw => titleClean === kw || titleClean.startsWith(kw + ' '))) continue
+          if (titleClean.length < 5) return
+          if (NAV_BLACKLIST.some(kw => titleClean === kw || titleClean.startsWith(kw + ' '))) return
 
           let url = link.startsWith('http') ? link : new URL(link, baseUrl).href
 
@@ -133,7 +133,7 @@ export class WebAdapter implements SourceAdapter {
           const urlPath = new URL(url).pathname
           if (urlPath === '/' || urlPath === '' || urlPath.endsWith('/') || urlPath.includes('/list/')) {
             // 进一步判断：如果摘要也很短，大概率是导航/分类页
-            if ((summary || '').length < 20) continue
+            if ((summary || '').length < 20) return
           }
 
           // 搜狗新闻重定向链接：提取真实URL
