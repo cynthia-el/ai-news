@@ -3,6 +3,7 @@ import { prisma } from '../src/lib/prisma'
 import { crawlAllSources, flattenResults, loadActiveSources } from '../src/lib/crawler'
 import { dedupItems } from '../src/lib/crawler'
 import { batchClassify, generateDeepReasons, generateDailyWithSections } from '../src/lib/ai'
+import { crawlDetail } from '../src/lib/sources/adapters/web'
 import { RawItem } from '../src/lib/sources/types'
 
 const BATCH_SIZE = 12
@@ -17,11 +18,38 @@ async function processCrawledItems(rawItems: RawItem[]) {
   const { unique } = dedupItems(rawItems)
   console.log(`[去重] 去重后 ${unique.length} 条`)
 
-  // 2. 加载信源映射（name -> id）
+  // 2. 加载信源映射（name -> id / config）
   const sources = await loadActiveSources()
   const sourceMap = new Map<string, string>()
+  const sourceConfigMap = new Map<string, string | null>()
   for (const s of sources) {
     sourceMap.set(s.name, s.id)
+    sourceConfigMap.set(s.name, s.config)
+  }
+
+  // 2.5 对内容过短的条目爬取详情页
+  let detailCrawled = 0
+  const maxDetailCrawl = 20
+  for (const item of unique) {
+    if (item.content.length >= 200) continue
+    if (detailCrawled >= maxDetailCrawl) break
+
+    const config = sourceConfigMap.get(item.source)
+    if (!config) continue
+
+    try {
+      console.log(`  [详情页] ${item.title.slice(0, 40)}...`)
+      const detailContent = await crawlDetail(item.url, config)
+      if (detailContent && detailContent.length > item.content.length) {
+        item.content = detailContent.slice(0, 3000)
+        detailCrawled++
+      }
+    } catch {
+      // 详情页爬取失败，忽略
+    }
+  }
+  if (detailCrawled > 0) {
+    console.log(`[详情页] 成功爬取 ${detailCrawled} 条详情页内容`)
   }
 
   // 3. 批量AI处理（分批次）

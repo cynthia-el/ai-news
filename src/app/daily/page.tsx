@@ -1,8 +1,6 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 
 interface DailyItem {
   id: string
@@ -75,7 +73,6 @@ export default function DailyPage() {
   const [loading, setLoading] = useState(true)
   const [dates, setDates] = useState<DateEntry[]>([])
   const [selectedDate, setSelectedDate] = useState('')
-  const router = useRouter()
 
   useEffect(() => {
     fetchToday()
@@ -132,53 +129,7 @@ export default function DailyPage() {
   return (
     <div className="min-h-screen bg-[#faf9f7]">
       <div className="flex">
-        {/* ===== 左侧导航栏 ===== */}
-        <aside className="w-16 md:w-[72px] flex-shrink-0 border-r border-stone-200 bg-white sticky top-0 h-screen flex flex-col items-center py-6 z-10">
-          <Link href="/" className="mb-8">
-            <div className="w-10 h-10 rounded-lg bg-stone-900 flex items-center justify-center">
-              <span className="text-white text-xs font-bold">AI</span>
-            </div>
-          </Link>
-
-          <nav className="flex flex-col items-center gap-6">
-            <button
-              onClick={() => router.push('/')}
-              className="flex flex-col items-center gap-1 group"
-            >
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center text-stone-400 group-hover:bg-stone-100 group-hover:text-stone-600 transition">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
-                </svg>
-              </div>
-              <span className="text-[10px] text-stone-400">首页</span>
-            </button>
-
-            <button
-              onClick={fetchToday}
-              className="flex flex-col items-center gap-1 group"
-            >
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center text-stone-400 group-hover:bg-stone-100 group-hover:text-stone-600 transition">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 01-2.25 2.25M16.5 7.5V18a2.25 2.25 0 002.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 002.25 2.25h13.5M6 7.5h3v3H6v-3z" />
-                </svg>
-              </div>
-              <span className="text-[10px] text-stone-400">日报</span>
-            </button>
-          </nav>
-
-          <div className="mt-auto flex flex-col items-center gap-4">
-            <button
-              onClick={() => router.push('/admin')}
-              className="w-9 h-9 rounded-lg flex items-center justify-center text-stone-400 hover:bg-stone-100 hover:text-stone-600 transition"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
-              </svg>
-            </button>
-          </div>
-        </aside>
-
-        {/* ===== 中间：往期日报列表 ===== */}
+        {/* ===== 左侧：往期日报列表 ===== */}
         <aside className="w-52 lg:w-60 flex-shrink-0 border-r border-stone-200 bg-white sticky top-0 h-screen overflow-hidden flex flex-col">
           {/* 最新一期按钮 */}
           <div className="p-4 border-b border-stone-100">
@@ -349,9 +300,9 @@ function DailyItemCard({ item }: { item: DailyItem }) {
   return (
     <article className="group">
       {/* 标题 */}
-      {item.url && item.url.startsWith('http') ? (
+      {item.url && item.url.trim().length > 0 ? (
         <a
-          href={item.url}
+          href={item.url.trim()}
           target="_blank"
           rel="noopener noreferrer"
           className="block text-[17px] font-semibold text-stone-900 hover:text-stone-600 hover:underline mb-2 leading-snug"

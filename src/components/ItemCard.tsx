@@ -51,9 +51,9 @@ export function ItemCard({ item }: ItemCardProps) {
         </div>
 
         {/* 标题 - 可点击跳转原文 */}
-        {item.url && item.url.startsWith('http') ? (
+        {item.url && item.url.trim().length > 0 ? (
           <a
-            href={item.url}
+            href={item.url.trim()}
             target="_blank"
             rel="noopener noreferrer"
             className="block text-[15px] font-semibold text-slate-900 hover:underline mb-2.5 leading-snug"

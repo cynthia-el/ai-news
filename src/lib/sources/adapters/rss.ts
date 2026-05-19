@@ -59,7 +59,7 @@ export class RssAdapter implements SourceAdapter {
 
         const summaryHtml = contentEncoded || description
         const summaryText = summaryHtml
-          ? cheerio.load(summaryHtml).text().trim().slice(0, 300)
+          ? cheerio.load(summaryHtml).text().trim().slice(0, 800)
           : ''
 
         if (title && link) {
