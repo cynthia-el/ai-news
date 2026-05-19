@@ -1,10 +1,106 @@
 import 'dotenv/config'
+import * as cheerio from 'cheerio'
+import * as iconv from 'iconv-lite'
 import { prisma } from '../src/lib/prisma'
 import { crawlAllSources, flattenResults, loadActiveSources } from '../src/lib/crawler'
 import { dedupItems } from '../src/lib/crawler'
 import { batchClassify, generateDeepReasons, generateDailyWithSections } from '../src/lib/ai'
-import { crawlDetail } from '../src/lib/sources/adapters/web'
 import { RawItem } from '../src/lib/sources/types'
+
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+
+/** 获取HTML并自动检测编码（处理gbk/gb2312等） */
+async function fetchHtmlWithEncoding(url: string, timeout = 10000): Promise<string> {
+  const controller = new AbortController()
+  const id = setTimeout(() => controller.abort(), timeout)
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': USER_AGENT,
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+      },
+    })
+    clearTimeout(id)
+    if (!res.ok) return ''
+
+    const buffer = Buffer.from(await res.arrayBuffer())
+
+    // 从Content-Type头中检测编码
+    const contentType = res.headers.get('content-type') || ''
+    const charsetMatch = contentType.match(/charset=([\w-]+)/i)
+    let encoding = charsetMatch ? charsetMatch[1].toLowerCase() : 'utf-8'
+
+    // 如果header没有指定或指定为utf-8，检查HTML meta标签
+    if (encoding === 'utf-8') {
+      const metaCheck = buffer.toString('ascii', 0, Math.min(4096, buffer.length))
+      const metaMatch = metaCheck.match(/<meta[^>]+charset=["']?([\w-]+)/i)
+      if (metaMatch) {
+        encoding = metaMatch[1].toLowerCase()
+      }
+    }
+
+    // 使用iconv-lite解码非UTF-8编码
+    if (encoding !== 'utf-8' && encoding !== 'utf8') {
+      return iconv.decode(buffer, encoding)
+    }
+
+    return buffer.toString('utf-8')
+  } catch {
+    return ''
+  }
+}
+
+/** 通用详情页爬取：不依赖CSS选择器配置 */
+async function fetchArticleContent(url: string): Promise<string> {
+  try {
+    const html = await fetchHtmlWithEncoding(url, 10000)
+    if (!html) return ''
+    const $ = cheerio.load(html)
+
+    // 移除无关元素
+    $('script, style, nav, header, footer, aside, .ad, .advertisement, .related-read, .comments, iframe, .sidebar').remove()
+
+    // 尝试多种正文选择器
+    const selectors = [
+      'article',
+      '.article-content',
+      '.content-detail',
+      '#artibody',
+      '.post-content',
+      '.entry-content',
+      '.news-content',
+      '.detail-content',
+      '.main-content',
+      '[class*="content"]',
+      '[class*="article"]',
+      'main',
+      '.text',
+      '.txt',
+    ]
+
+    for (const sel of selectors) {
+      const el = $(sel).first()
+      if (el.length) {
+        const text = el.text().trim()
+        if (text.length > 200) {
+          return text.slice(0, 5000)
+        }
+      }
+    }
+
+    // 兜底：取body中较长的段落
+    let bestText = ''
+    $('p').each((_, p) => {
+      const t = $(p).text().trim()
+      if (t.length > bestText.length) bestText = t
+    })
+    return bestText.slice(0, 5000)
+  } catch {
+    return ''
+  }
+}
 
 const BATCH_SIZE = 12
 
@@ -29,19 +125,16 @@ async function processCrawledItems(rawItems: RawItem[]) {
 
   // 2.5 对内容过短的条目爬取详情页
   let detailCrawled = 0
-  const maxDetailCrawl = 20
+  const maxDetailCrawl = unique.length
   for (const item of unique) {
-    if (item.content.length >= 200) continue
+    if (item.content.length >= 300) continue
     if (detailCrawled >= maxDetailCrawl) break
-
-    const config = sourceConfigMap.get(item.source)
-    if (!config) continue
 
     try {
       console.log(`  [详情页] ${item.title.slice(0, 40)}...`)
-      const detailContent = await crawlDetail(item.url, config)
-      if (detailContent && detailContent.length > item.content.length) {
-        item.content = detailContent.slice(0, 3000)
+      const detailContent = await fetchArticleContent(item.url)
+      if (detailContent && detailContent.length > item.content.length + 100) {
+        item.content = detailContent.slice(0, 5000)
         detailCrawled++
       }
     } catch {

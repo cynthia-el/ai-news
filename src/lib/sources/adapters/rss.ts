@@ -62,6 +62,17 @@ export class RssAdapter implements SourceAdapter {
           ? cheerio.load(summaryHtml).text().trim().slice(0, 800)
           : ''
 
+        // Bing 新闻跳转链接：提取原始 URL
+        if (link && link.includes('bing.com/news/apiclick.aspx')) {
+          try {
+            const urlObj = new URL(link)
+            const realUrl = urlObj.searchParams.get('url')
+            if (realUrl) {
+              link = decodeURIComponent(realUrl)
+            }
+          } catch { /* 解析失败保留原链接 */ }
+        }
+
         if (title && link) {
           items.push({
             title,

@@ -1,8 +1,62 @@
 import * as cheerio from 'cheerio'
+import * as iconv from 'iconv-lite'
 import { RawItem, SourceAdapter, SourceConfig } from '../types'
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+
+// 导航/非文章标题黑名单
+const NAV_BLACKLIST = [
+  '首页', '新闻中心', '建材展会', '建材行情', '加盟代理', '采购中心',
+  '产品供给', '人才频道', '精品推荐', '我要代理', '建材地图',
+  '新闻', '体育', '娱乐', '财经', '汽车', '科技', '时尚', '手机', '房产', '教育',
+  '地板', '洁具', '陶瓷', '涂料', '防水', '家居', '门窗', '吊顶',
+  '管材管件', '厨卫设施', '建筑材料', '机械设备', '精细化工',
+]
+
+/** 检测HTML中的charset并正确解码 */
+async function fetchHtmlWithEncoding(url: string, timeout = 15000): Promise<string> {
+  const controller = new AbortController()
+  const id = setTimeout(() => controller.abort(), timeout)
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': USER_AGENT,
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+      },
+    })
+    clearTimeout(id)
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+    const buffer = Buffer.from(await response.arrayBuffer())
+
+    // 从Content-Type头中检测编码
+    const contentType = response.headers.get('content-type') || ''
+    const charsetMatch = contentType.match(/charset=([\w-]+)/i)
+    let encoding = charsetMatch ? charsetMatch[1].toLowerCase() : 'utf-8'
+
+    // 如果header没有指定或指定为utf-8，检查HTML meta标签
+    if (encoding === 'utf-8') {
+      const metaCheck = buffer.toString('ascii', 0, Math.min(4096, buffer.length))
+      const metaMatch = metaCheck.match(/<meta[^>]+charset=["']?([\w-]+)/i)
+      if (metaMatch) {
+        encoding = metaMatch[1].toLowerCase()
+      }
+    }
+
+    // 使用iconv-lite解码非UTF-8编码
+    if (encoding !== 'utf-8' && encoding !== 'utf8') {
+      return iconv.decode(buffer, encoding)
+    }
+
+    return buffer.toString('utf-8')
+  } catch (error) {
+    clearTimeout(id)
+    throw error
+  }
+}
 
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 15000): Promise<Response> {
   const controller = new AbortController()
@@ -44,13 +98,11 @@ export class WebAdapter implements SourceAdapter {
     }
 
     try {
-      const response = await fetchWithTimeout(source.url)
-      if (!response.ok) {
-        console.warn(`[WebAdapter] ${source.name} 请求失败: ${response.status}`)
+      const html = await fetchHtmlWithEncoding(source.url)
+      if (!html) {
+        console.warn(`[WebAdapter] ${source.name} 请求失败: 空响应`)
         return items
       }
-
-      const html = await response.text()
       const $ = cheerio.load(html)
       const baseUrl = new URL(source.url).origin
 
@@ -70,12 +122,36 @@ export class WebAdapter implements SourceAdapter {
           : ''
 
         if (title && link) {
-          const url = link.startsWith('http') ? link : new URL(link, baseUrl).href
+          // 过滤导航页/非文章
+          const titleClean = title.trim()
+          if (titleClean.length < 5) continue
+          if (NAV_BLACKLIST.some(kw => titleClean === kw || titleClean.startsWith(kw + ' '))) continue
+
+          let url = link.startsWith('http') ? link : new URL(link, baseUrl).href
+
+          // 过滤分类页/列表页URL（非具体文章）
+          const urlPath = new URL(url).pathname
+          if (urlPath === '/' || urlPath === '' || urlPath.endsWith('/') || urlPath.includes('/list/')) {
+            // 进一步判断：如果摘要也很短，大概率是导航/分类页
+            if ((summary || '').length < 20) continue
+          }
+
+          // 搜狗新闻重定向链接：提取真实URL
+          if (url.includes('sogou.com/link?')) {
+            try {
+              const urlObj = new URL(url)
+              const realUrl = urlObj.searchParams.get('url')
+              if (realUrl) {
+                url = decodeURIComponent(realUrl)
+              }
+            } catch { /* 解析失败则保留原链接 */ }
+          }
+
           items.push({
-            title,
+            title: titleClean,
             url,
             source: source.name,
-            content: summary || title,
+            content: summary || titleClean,
             publishedAt: parseDate(dateText),
             imageUrl: imageUrl || undefined,
           })
@@ -97,10 +173,8 @@ export async function crawlDetail(url: string, configStr: string | null): Promis
   if (!cfg.detailSelector) return ''
 
   try {
-    const response = await fetchWithTimeout(url)
-    if (!response.ok) return ''
-
-    const html = await response.text()
+    const html = await fetchHtmlWithEncoding(url)
+    if (!html) return ''
     const $ = cheerio.load(html)
 
     if (cfg.detailSelector.filter) {
