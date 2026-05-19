@@ -104,6 +104,21 @@ async function fetchArticleContent(url: string): Promise<string> {
 
 const BATCH_SIZE = 12
 
+// 采购/招商/广告硬过滤关键词（即使AI给了高分也拒绝进入精选）
+const PROCUREMENT_KEYWORDS = ['需要采购', '求购', '询价', '诚招代理', '诚招全国', '厂家招商', '品牌招商', '我要代理', '加盟热线', '招商加盟']
+const PROCUREMENT_WEAK = ['咨询', '采购', '招商', '加盟']
+
+function isProcurementOrAd(title: string): boolean {
+  const t = title.trim()
+  // 强匹配：直接拒绝
+  if (PROCUREMENT_KEYWORDS.some(kw => t.includes(kw))) return true
+  // 弱匹配：标题以"咨询"开头（大概率是B2B询价）
+  if (t.startsWith('咨询') && t.length < 30) return true
+  // 弱匹配：包含"十大品牌"（通常是软文排行榜）
+  if (t.includes('十大品牌') && (t.includes('排名') || t.includes('评测') || t.includes('综合'))) return true
+  return false
+}
+
 async function processCrawledItems(rawItems: RawItem[]) {
   let added = 0
   let skipped = 0
@@ -113,6 +128,59 @@ async function processCrawledItems(rawItems: RawItem[]) {
   console.log(`\n[去重] 原始资讯 ${rawItems.length} 条`)
   const { unique } = dedupItems(rawItems)
   console.log(`[去重] 去重后 ${unique.length} 条`)
+
+  // 1.5 智能日期过滤
+  const now = new Date()
+  const cutoff48h = new Date(now.getTime() - 48 * 60 * 60 * 1000)
+  const cutoff7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+  const futureCutoff = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+
+  const recentItems = unique.filter((item) => {
+    const date = item.publishedAt
+    if (!date) return false
+    const d = new Date(date)
+
+    // 情况A：有真实日期（非fallback）→ 严格48小时
+    // 判断是否为fallback：如果publishedAt距离现在小于5分钟，可能是fallback
+    const isFallback = now.getTime() - d.getTime() < 5 * 60 * 1000
+
+    if (!isFallback) {
+      return d >= cutoff48h && d <= futureCutoff
+    }
+
+    // 情况B：fallback日期（列表页无日期）→ 用标题/URL做旧文检测
+    const title = item.title
+    const url = item.url
+
+    // 检测标题中的旧年份（如"2024"、"2023"且不是当前年）
+    const yearMatches = title.match(/\b(20\d{2})\b/g)
+    if (yearMatches) {
+      for (const ym of yearMatches) {
+        const y = parseInt(ym, 10)
+        if (y < now.getFullYear() - 1) return false // 早于去年的内容
+        if (y === now.getFullYear() - 1 && !title.includes('年报') && !title.includes('回顾')) return false
+      }
+    }
+
+    // 检测URL中的旧年份
+    const urlYearMatch = url.match(/\/(20\d{2})[\/-]/)
+    if (urlYearMatch) {
+      const urlYear = parseInt(urlYearMatch[1], 10)
+      if (urlYear < now.getFullYear()) return false
+    }
+
+    // 检测明显的旧文/回顾关键词
+    const oldKeywords = ['回顾', '盘点', '年报', '去年', '前年', '往届', '历届', '往届回顾']
+    if (oldKeywords.some(kw => title.includes(kw))) return false
+
+    // fallback条目放宽到7天
+    return true
+  })
+  console.log(`[日期过滤] 保留: ${recentItems.length} 条 (排除 ${unique.length - recentItems.length} 条陈旧)`)
+
+  if (recentItems.length === 0) {
+    return { added: 0, skipped: 0, failed: 0, sourceStats: {} }
+  }
 
   // 2. 加载信源映射（name -> id / config）
   const sources = await loadActiveSources()
@@ -125,8 +193,8 @@ async function processCrawledItems(rawItems: RawItem[]) {
 
   // 2.5 对内容过短的条目爬取详情页
   let detailCrawled = 0
-  const maxDetailCrawl = unique.length
-  for (const item of unique) {
+  const maxDetailCrawl = recentItems.length
+  for (const item of recentItems) {
     if (item.content.length >= 300) continue
     if (detailCrawled >= maxDetailCrawl) break
 
@@ -150,9 +218,9 @@ async function processCrawledItems(rawItems: RawItem[]) {
 
   const allResults: { raw: RawItem; category: string; summary: string; score: number; tags: string[] }[] = []
 
-  for (let i = 0; i < unique.length; i += BATCH_SIZE) {
-    const batch = unique.slice(i, i + BATCH_SIZE)
-    console.log(`  处理批次 ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(unique.length / BATCH_SIZE)} (${batch.length} 条)`)
+  for (let i = 0; i < recentItems.length; i += BATCH_SIZE) {
+    const batch = recentItems.slice(i, i + BATCH_SIZE)
+    console.log(`  处理批次 ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(recentItems.length / BATCH_SIZE)} (${batch.length} 条)`)
 
     try {
       const batchResults = await batchClassify(
@@ -173,7 +241,7 @@ async function processCrawledItems(rawItems: RawItem[]) {
       }
 
       // 避免请求过快
-      if (i + BATCH_SIZE < unique.length) {
+      if (i + BATCH_SIZE < recentItems.length) {
         await new Promise((resolve) => setTimeout(resolve, 800))
       }
     } catch (error) {
@@ -216,14 +284,24 @@ async function processCrawledItems(rawItems: RawItem[]) {
     }
   }
 
-  // 5. 存储到数据库
+  // 5. 存储到数据库（应用采购/招商硬过滤）
   console.log(`\n[存储] 开始写入数据库`)
 
   const sourceStats: Record<string, { fetched: number; added: number; failed: number }> = {}
+  let procurementFiltered = 0
 
   for (let i = 0; i < allResults.length; i++) {
-    const { raw, category, summary, score, tags } = allResults[i]
-    const reason = reasonsMap.get(i) || (score >= 7 ? '行业相关资讯，值得关注' : '行业相关资讯')
+    let { raw, category, summary, score, tags } = allResults[i]
+    let finalScore = score
+
+    // 硬过滤：采购/招商/广告类内容强制降分
+    if (isProcurementOrAd(raw.title)) {
+      finalScore = Math.min(finalScore, 3)
+      procurementFiltered++
+    }
+
+    const reason = reasonsMap.get(i) || (finalScore >= 7 ? '行业相关资讯，值得关注' : '行业相关资讯')
+    const isSelected = finalScore >= 7
 
     // 初始化统计
     if (!sourceStats[raw.source]) {
@@ -255,20 +333,24 @@ async function processCrawledItems(rawItems: RawItem[]) {
           category,
           summary,
           reason,
-          score,
-          isSelected: score >= 7,
+          score: finalScore,
+          isSelected,
           tags,
         },
       })
 
       added++
       sourceStats[raw.source].added++
-      console.log(`  [${category}] ${raw.title.slice(0, 50)} (评分:${score})`)
+      console.log(`  [${category}] ${raw.title.slice(0, 50)} (评分:${finalScore}${finalScore !== score ? ',原' + score : ''})`)
     } catch (error) {
       failed++
       sourceStats[raw.source].failed++
       console.error(`  ✗ 存储失败: ${raw.title.slice(0, 40)}`, (error as Error).message)
     }
+  }
+
+  if (procurementFiltered > 0) {
+    console.log(`  [硬过滤] 采购/招商类强制降分: ${procurementFiltered} 条`)
   }
 
   console.log(`\n处理结果: 新增 ${added} 条, 跳过 ${skipped} 条, 失败 ${failed} 条`)

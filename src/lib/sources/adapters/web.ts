@@ -80,11 +80,50 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout 
   }
 }
 
-function parseDate(dateText: string): Date {
-  if (!dateText) return new Date()
+/** 解析中文日期，支持多种格式和相对时间 */
+function parseDate(dateText: string): Date | null {
+  if (!dateText) return null
   const cleaned = dateText.trim().replace(/\s+/g, ' ')
-  const d = new Date(cleaned)
-  return isNaN(d.getTime()) ? new Date() : d
+
+  // 1. 标准ISO/数字格式直接解析
+  const d1 = new Date(cleaned)
+  if (!isNaN(d1.getTime())) return d1
+
+  // 2. 相对时间："X分钟前", "X小时前", "X天前", "刚刚"
+  const relativeMatch = cleaned.match(/^(\d+)\s*[分钟小天时天][钟时前]?前?$/)
+  if (relativeMatch) {
+    const num = parseInt(relativeMatch[1], 10)
+    const now = new Date()
+    if (cleaned.includes('分')) now.setMinutes(now.getMinutes() - num)
+    else if (cleaned.includes('小时') || cleaned.includes('时')) now.setHours(now.getHours() - num)
+    else if (cleaned.includes('天')) now.setDate(now.getDate() - num)
+    return now
+  }
+  if (cleaned === '刚刚' || cleaned === '刚才') return new Date()
+
+  // 3. "今天", "昨天", "前天"
+  const now = new Date()
+  if (cleaned === '今天') return now
+  if (cleaned === '昨天') { now.setDate(now.getDate() - 1); return now }
+  if (cleaned === '前天') { now.setDate(now.getDate() - 2); return now }
+
+  // 4. 中文日期格式："2024年5月19日", "2024-05-19", "5月19日"
+  const cnFullMatch = cleaned.match(/(\d{4})\s*[年/\-.]\s*(\d{1,2})\s*[月/\-.]\s*(\d{1,2})/)
+  if (cnFullMatch) {
+    const d2 = new Date(`${cnFullMatch[1]}-${cnFullMatch[2].padStart(2, '0')}-${cnFullMatch[3].padStart(2, '0')}`)
+    if (!isNaN(d2.getTime())) return d2
+  }
+
+  // 5. 只有月日："5月19日" → 默认为今年
+  const cnMonthDayMatch = cleaned.match(/(\d{1,2})\s*[月/\-.]\s*(\d{1,2})/)
+  if (cnMonthDayMatch && !cleaned.includes('年')) {
+    const year = new Date().getFullYear()
+    const d3 = new Date(`${year}-${cnMonthDayMatch[1].padStart(2, '0')}-${cnMonthDayMatch[2].padStart(2, '0')}`)
+    if (!isNaN(d3.getTime())) return d3
+  }
+
+  // 无法解析
+  return null
 }
 
 export class WebAdapter implements SourceAdapter {
@@ -147,12 +186,17 @@ export class WebAdapter implements SourceAdapter {
             } catch { /* 解析失败则保留原链接 */ }
           }
 
+          let parsedDate = parseDate(dateText)
+          // 无法解析日期的条目保留，使用当前时间作为fallback
+          // （首页列表上的文章通常较新，后续在sync.ts中用内容/URL进一步过滤旧文）
+          if (!parsedDate) parsedDate = new Date()
+
           items.push({
             title: titleClean,
             url,
             source: source.name,
             content: summary || titleClean,
-            publishedAt: parseDate(dateText),
+            publishedAt: parsedDate,
             imageUrl: imageUrl || undefined,
           })
         }

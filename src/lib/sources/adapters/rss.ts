@@ -73,13 +73,23 @@ export class RssAdapter implements SourceAdapter {
           } catch { /* 解析失败保留原链接 */ }
         }
 
+        let parsedDate: Date | null = null
+        if (pubDate) {
+          const d = new Date(pubDate)
+          parsedDate = isNaN(d.getTime()) ? null : d
+        }
+        // RSS 通常有可靠日期，但如果完全没有日期则跳过
+        if (!parsedDate) {
+          return // 在 .each 回调中用 return 跳过
+        }
+
         if (title && link) {
           items.push({
             title,
             url: link,
             source: source.name,
             content: summaryText || title,
-            publishedAt: pubDate ? new Date(pubDate) : new Date(),
+            publishedAt: parsedDate,
           })
         }
       })
