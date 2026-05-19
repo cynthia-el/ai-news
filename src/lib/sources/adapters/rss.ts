@@ -42,10 +42,20 @@ export class RssAdapter implements SourceAdapter {
       $('item').each((_, element) => {
         const el = $(element)
         const title = el.find('title').text().trim()
-        const link = el.find('link').text().trim() || el.find('guid').text().trim()
+        let link = el.find('link').text().trim()
+        const guid = el.find('guid').text().trim()
         const description = el.find('description').text().trim()
         const pubDate = el.find('pubDate').text().trim()
         const contentEncoded = el.find('content\\:encoded').text().trim()
+
+        // 验证 URL 有效性：guid 可能不是有效 URL
+        if (!link || !link.startsWith('http')) {
+          if (guid && guid.startsWith('http')) {
+            link = guid
+          } else {
+            link = ''
+          }
+        }
 
         const summaryHtml = contentEncoded || description
         const summaryText = summaryHtml

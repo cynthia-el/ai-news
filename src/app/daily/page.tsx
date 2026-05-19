@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { ItemCard } from '@/components/ItemCard'
-import { DailySection } from '@/components/DailySection'
+import { useState, useEffect, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 interface DailyItem {
   id: string
@@ -36,11 +36,46 @@ interface DailyData {
   sections: DailySectionData[]
 }
 
+interface DateEntry {
+  date: string
+  title: string
+  summary: string
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  'industry-news': '行业动态',
+  'new-products': '新品发布',
+  'design-trends': '设计趋势',
+  'policy': '政策法规',
+  'materials': '原材料',
+  'tips': '实用技巧',
+}
+
+function formatDateFull(dateStr: string) {
+  const d = new Date(dateStr)
+  const y = d.getFullYear()
+  const m = d.getMonth() + 1
+  const day = d.getDate()
+  const week = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()]
+  return { y, m, day, week, label: `${y}年${m}月${day}日`, short: `${m}月${day}日` }
+}
+
+function groupDatesByMonth(dates: DateEntry[]) {
+  const groups: Record<string, DateEntry[]> = {}
+  for (const d of dates) {
+    const key = d.date.slice(0, 7) // "2026-05"
+    if (!groups[key]) groups[key] = []
+    groups[key].push(d)
+  }
+  return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]))
+}
+
 export default function DailyPage() {
   const [daily, setDaily] = useState<DailyData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [dates, setDates] = useState<{ date: string; title: string }[]>([])
+  const [dates, setDates] = useState<DateEntry[]>([])
   const [selectedDate, setSelectedDate] = useState('')
+  const router = useRouter()
 
   useEffect(() => {
     fetchToday()
@@ -50,7 +85,7 @@ export default function DailyPage() {
   async function fetchToday() {
     setLoading(true)
     try {
-      const res = await fetch('/api/public/daily')
+      const res = await fetch('/api/public/daily', { cache: 'no-store' })
       const data = await res.json()
       setDaily(data)
       setSelectedDate(data.date || '')
@@ -63,7 +98,7 @@ export default function DailyPage() {
 
   async function fetchDates() {
     try {
-      const res = await fetch('/api/public/dailies?take=30')
+      const res = await fetch('/api/public/dailies?take=90', { cache: 'no-store' })
       const data = await res.json()
       setDates(data.dailies || [])
     } catch {
@@ -74,8 +109,12 @@ export default function DailyPage() {
   async function fetchDailyByDate(date: string) {
     setLoading(true)
     try {
-      const res = await fetch(`/api/public/daily/${date}`)
+      const res = await fetch(`/api/public/daily/${date}`, { cache: 'no-store' })
       const data = await res.json()
+      if (data.error) {
+        console.error(data.error)
+        return
+      }
       setDaily(data)
       setSelectedDate(date)
     } catch {
@@ -85,109 +124,273 @@ export default function DailyPage() {
     }
   }
 
+  const groupedDates = useMemo(() => groupDatesByMonth(dates), [dates])
+  const dateInfo = selectedDate ? formatDateFull(selectedDate) : null
+
+  const sectionNumbers = ['01', '02', '03', '04', '05', '06', '07']
+
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
-      <div className="mb-8">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100">
-            每日精选
-          </span>
-        </div>
-        <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">
-          行业日报
-        </h1>
-        <p className="text-slate-500">
-          AI 每日精选行业资讯汇总，快速把握当日要点
-        </p>
-      </div>
+    <div className="min-h-screen bg-[#faf9f7]">
+      <div className="flex">
+        {/* ===== 左侧导航栏 ===== */}
+        <aside className="w-16 md:w-[72px] flex-shrink-0 border-r border-stone-200 bg-white sticky top-0 h-screen flex flex-col items-center py-6 z-10">
+          <Link href="/" className="mb-8">
+            <div className="w-10 h-10 rounded-lg bg-stone-900 flex items-center justify-center">
+              <span className="text-white text-xs font-bold">AI</span>
+            </div>
+          </Link>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Sidebar dates */}
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100">
-              <h3 className="text-sm font-semibold text-slate-700">历史日报</h3>
-            </div>
-            <div className="max-h-[640px] overflow-y-auto">
-              {dates.map((d) => (
-                <button
-                  key={d.date}
-                  onClick={() => fetchDailyByDate(d.date)}
-                  className={`w-full text-left px-5 py-3.5 border-b border-slate-50 last:border-0 text-sm transition ${
-                    selectedDate === d.date
-                      ? 'bg-indigo-50 text-indigo-700'
-                      : 'hover:bg-slate-50 text-slate-700'
-                  }`}
-                >
-                  <div className="font-medium">{d.date}</div>
-                  <div className="text-xs text-slate-400 truncate mt-0.5">
-                    {d.title}
-                  </div>
-                </button>
-              ))}
-              {dates.length === 0 && (
-                <div className="px-5 py-8 text-center text-sm text-slate-400">
-                  暂无历史日报
-                </div>
-              )}
-            </div>
+          <nav className="flex flex-col items-center gap-6">
+            <button
+              onClick={() => router.push('/')}
+              className="flex flex-col items-center gap-1 group"
+            >
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center text-stone-400 group-hover:bg-stone-100 group-hover:text-stone-600 transition">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+                </svg>
+              </div>
+              <span className="text-[10px] text-stone-400">首页</span>
+            </button>
+
+            <button
+              onClick={fetchToday}
+              className="flex flex-col items-center gap-1 group"
+            >
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center text-stone-400 group-hover:bg-stone-100 group-hover:text-stone-600 transition">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 01-2.25 2.25M16.5 7.5V18a2.25 2.25 0 002.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 002.25 2.25h13.5M6 7.5h3v3H6v-3z" />
+                </svg>
+              </div>
+              <span className="text-[10px] text-stone-400">日报</span>
+            </button>
+          </nav>
+
+          <div className="mt-auto flex flex-col items-center gap-4">
+            <button
+              onClick={() => router.push('/admin')}
+              className="w-9 h-9 rounded-lg flex items-center justify-center text-stone-400 hover:bg-stone-100 hover:text-stone-600 transition"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+              </svg>
+            </button>
           </div>
-        </div>
+        </aside>
 
-        {/* Main content */}
-        <div className="lg:col-span-3">
-          {loading ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : daily ? (
-            <div className="space-y-5">
-              {/* Daily header */}
-              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-                <div className="flex items-center gap-2.5 mb-4">
-                  <span className="px-3 py-1 text-xs font-semibold rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100">
-                    日报
-                  </span>
-                  <span className="text-sm text-slate-400">{daily.date}</span>
-                </div>
-                <h2 className="text-xl font-bold text-slate-900 mb-3">
-                  {daily.title}
-                </h2>
-                <p className="text-slate-500 leading-relaxed mb-4">{daily.summary}</p>
-                {daily.editorNote && (
-                  <div className="flex items-start gap-2.5 px-4 py-3 bg-amber-50/60 rounded-xl border border-amber-100/60">
-                    <svg className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
-                    </svg>
-                    <span className="text-sm text-amber-800 leading-relaxed">{daily.editorNote}</span>
+        {/* ===== 中间：往期日报列表 ===== */}
+        <aside className="w-52 lg:w-60 flex-shrink-0 border-r border-stone-200 bg-white sticky top-0 h-screen overflow-hidden flex flex-col">
+          {/* 最新一期按钮 */}
+          <div className="p-4 border-b border-stone-100">
+            <button
+              onClick={fetchToday}
+              className={`w-full py-2.5 px-4 rounded-lg text-sm font-medium transition ${
+                selectedDate === (daily?.date || new Date().toISOString().split('T')[0])
+                  ? 'bg-stone-900 text-white'
+                  : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+              }`}
+            >
+              最新一期
+            </button>
+          </div>
+
+          {/* 日期列表 */}
+          <div className="flex-1 overflow-y-auto">
+            {groupedDates.length === 0 ? (
+              <div className="p-4 text-xs text-stone-400 text-center">暂无历史日报</div>
+            ) : (
+              groupedDates.map(([monthKey, monthDates]) => {
+                const [y, m] = monthKey.split('-')
+                return (
+                  <div key={monthKey} className="border-b border-stone-50 last:border-0">
+                    <div className="px-4 py-2 text-[11px] font-semibold text-stone-400 uppercase tracking-wider">
+                      {y}年{m}月
+                    </div>
+                    {monthDates.map((d) => {
+                      const info = formatDateFull(d.date)
+                      const isActive = selectedDate === d.date
+                      return (
+                        <button
+                          key={d.date}
+                          onClick={() => fetchDailyByDate(d.date)}
+                          className={`w-full text-left px-4 py-2.5 transition border-l-2 ${
+                            isActive
+                              ? 'border-l-stone-900 bg-stone-50'
+                              : 'border-l-transparent hover:bg-stone-50'
+                          }`}
+                        >
+                          <div className={`text-sm font-medium ${isActive ? 'text-stone-900' : 'text-stone-600'}`}>
+                            {info.short}
+                          </div>
+                          <div className="text-[10px] text-stone-400 truncate mt-0.5 leading-tight">
+                            {d.title}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </aside>
+
+        {/* ===== 右侧：主内容区 ===== */}
+        <main className="flex-1 min-w-0">
+          <div className="max-w-3xl mx-auto px-8 py-10">
+            {loading ? (
+              <div className="flex items-center justify-center py-32">
+                <div className="w-8 h-8 border-2 border-stone-300 border-t-stone-900 rounded-full animate-spin" />
+              </div>
+            ) : daily ? (
+              <div>
+                {/* 报头 */}
+                <header className="mb-10 pb-8 border-b-2 border-stone-900">
+                  <div className="flex items-end justify-between">
+                    <div>
+                      <h1 className="text-5xl md:text-6xl font-black text-stone-900 tracking-tight leading-none mb-3">
+                        家居资讯日报
+                      </h1>
+                      {dateInfo && (
+                        <p className="text-base text-stone-500 font-medium">
+                          {dateInfo.label} · 星期{dateInfo.week}
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right hidden md:block">
+                      <p className="text-xs text-stone-400 uppercase tracking-widest mb-1">Daily Briefing</p>
+                      <p className="text-sm text-stone-500 font-medium">{daily.items.length} 条精选</p>
+                    </div>
+                  </div>
+
+                  {/* 主编导语 */}
+                  {(daily.summary || daily.editorNote) && (
+                    <div className="mt-6 pt-6 border-t border-stone-200">
+                      <p className="text-stone-600 leading-relaxed text-[15px]">
+                        {daily.summary}
+                      </p>
+                      {daily.editorNote && (
+                        <p className="mt-2 text-stone-500 text-sm italic">
+                          主编点评：{daily.editorNote}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </header>
+
+                {/* 内容区 */}
+                {daily.sections && daily.sections.length > 0 ? (
+                  <div className="space-y-12">
+                    {daily.sections.map((section, idx) => (
+                      <section key={section.id}>
+                        {/* 版块标题 */}
+                        <div className="flex items-baseline gap-4 mb-5 pb-3 border-b border-stone-200">
+                          <span className="text-3xl font-black text-stone-300 tabular-nums">
+                            {sectionNumbers[idx] || String(idx + 1).padStart(2, '0')}
+                          </span>
+                          <div>
+                            <h2 className="text-xl font-bold text-stone-900">{section.title}</h2>
+                            {section.description && (
+                              <p className="text-sm text-stone-500 mt-0.5">{section.description}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 版块内容 */}
+                        <div className="space-y-5">
+                          {section.items.map((item) => (
+                            <DailyItemCard key={item.id} item={item} />
+                          ))}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                ) : daily.items?.length > 0 ? (
+                  <div className="space-y-5">
+                    {daily.items.map((item) => (
+                      <DailyItemCard key={item.id} item={item} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-20 text-stone-400">
+                    今日暂无精选条目
                   </div>
                 )}
-              </div>
 
-              {/* Sections */}
-              {daily.sections && daily.sections.length > 0 ? (
-                daily.sections.map((section) => (
-                  <DailySection key={section.id} section={section} />
-                ))
-              ) : daily.items?.length > 0 ? (
-                <div className="grid gap-3">
-                  {daily.items.map((item) => (
-                    <ItemCard key={item.id} item={item} />
-                  ))}
+                {/* 报尾 */}
+                <footer className="mt-16 pt-8 border-t border-stone-200 text-center">
+                  <p className="text-xs text-stone-400 uppercase tracking-widest">
+                    家居资讯日报 · 每日精选行业要闻
+                  </p>
+                </footer>
+              </div>
+            ) : (
+              <div className="text-center py-32 text-stone-400">
+                <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-stone-100 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-stone-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m5.231 13.481L15 17.25m-4.5-15H5.625c-.621 0-1.125.504-1.125 1.125v16.5c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                  </svg>
                 </div>
-              ) : (
-                <div className="bg-white rounded-2xl border border-slate-100 p-12 text-center text-slate-400">
-                  今日暂无精选条目
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="bg-white rounded-2xl border border-slate-100 p-12 text-center text-slate-400">
-              暂无日报数据
-            </div>
-          )}
-        </div>
+                <p className="text-stone-400 text-sm">暂无日报数据</p>
+                <p className="text-stone-300 text-xs mt-1">日报将在每日同步任务后自动生成</p>
+              </div>
+            )}
+          </div>
+        </main>
       </div>
     </div>
+  )
+}
+
+/* ========== 日报专用资讯卡片 ========== */
+function DailyItemCard({ item }: { item: DailyItem }) {
+  const displaySource = item.sourceRef?.name || item.source
+
+  return (
+    <article className="group">
+      {/* 标题 */}
+      {item.url && item.url.startsWith('http') ? (
+        <a
+          href={item.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block text-[17px] font-semibold text-stone-900 hover:text-stone-600 hover:underline mb-2 leading-snug"
+        >
+          {item.title}
+        </a>
+      ) : (
+        <h3 className="text-[17px] font-semibold text-stone-900 mb-2 leading-snug">
+          {item.title}
+        </h3>
+      )}
+
+      {/* 摘要 */}
+      {item.summary && (
+        <p className="text-[14px] text-stone-500 leading-relaxed mb-2">
+          {item.summary}
+        </p>
+      )}
+
+      {/* AI 精选解读 */}
+      {item.reason && item.score >= 7 && (
+        <p className="text-[13px] text-stone-400 leading-relaxed mb-2 italic">
+          <span className="text-stone-500 not-italic font-medium">AI 精选解读：</span>
+          {item.reason}
+        </p>
+      )}
+
+      {/* 元信息 */}
+      <div className="flex items-center gap-2 text-[11px] text-stone-400">
+        <span>{displaySource}</span>
+        <span>·</span>
+        <span>{CATEGORY_LABELS[item.category] || item.category}</span>
+        {item.tags.length > 0 && (
+          <>
+            <span>·</span>
+            <span>{item.tags.slice(0, 3).join(' · ')}</span>
+          </>
+        )}
+      </div>
+    </article>
   )
 }

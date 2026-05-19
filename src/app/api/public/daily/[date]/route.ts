@@ -27,6 +27,7 @@ export async function GET(
       id: { in: daily.itemIds },
     },
     orderBy: { score: 'desc' },
+    take: 7,
     include: {
       sourceRef: {
         select: { id: true, name: true, type: true },
@@ -39,9 +40,13 @@ export async function GET(
     items: items.filter((item) => section.itemIds.includes(item.id)),
   }))
 
-  return Response.json({
+  const response = Response.json({
     ...daily,
     items,
     sections: sectionsWithItems,
   })
+  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+  response.headers.set('Pragma', 'no-cache')
+  response.headers.set('Expires', '0')
+  return response
 }

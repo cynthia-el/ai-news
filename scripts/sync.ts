@@ -168,7 +168,7 @@ async function generateDaily() {
       publishedAt: { gte: yesterday },
     },
     orderBy: { score: 'desc' },
-    take: 30,
+    take: 7,
   })
 
   if (items.length === 0) {

@@ -99,7 +99,7 @@ ${itemsText}
   {
     "index": 1,
     "category": "industry-news|new-products|design-trends|policy|materials|tips",
-    "summary": "20字以内的核心摘要",
+    "summary": "100字左右的核心摘要，概括资讯的主要内容和要点",
     "score": 1-10,
     "tags": ["标签1", "标签2"]
   }
@@ -143,7 +143,7 @@ tags: 提取2-4个关键词标签，帮助检索和归类。`
       return {
         index: r.index || idx + 1,
         category,
-        summary: r.summary?.slice(0, 50) || items[idx]?.title?.slice(0, 30) || '',
+        summary: r.summary?.slice(0, 200) || items[idx]?.title?.slice(0, 50) || '',
         score,
         tags,
       }
@@ -153,7 +153,7 @@ tags: 提取2-4个关键词标签，帮助检索和归类。`
     return items.map((_, idx) => ({
       index: idx + 1,
       category: 'industry-news',
-      summary: items[idx]?.title?.slice(0, 30) || '',
+      summary: items[idx]?.title?.slice(0, 50) || '',
       score: 5,
       tags: [],
     }))

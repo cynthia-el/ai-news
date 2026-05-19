@@ -45,7 +45,7 @@ export default function Home() {
     if (q) params.set('q', q)
 
     try {
-      const res = await fetch(`/api/public/items?${params}`)
+      const res = await fetch(`/api/public/items?${params}`, { cache: 'no-store' })
       const data = await res.json()
       setItems(data.items || [])
       setTotalPages(data.pagination?.totalPages || 1)

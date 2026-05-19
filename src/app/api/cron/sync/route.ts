@@ -145,7 +145,7 @@ async function generateDaily() {
   const items = await prisma.item.findMany({
     where: { isSelected: true, publishedAt: { gte: yesterday } },
     orderBy: { score: 'desc' },
-    take: 30,
+    take: 7,
   })
 
   if (items.length === 0) {

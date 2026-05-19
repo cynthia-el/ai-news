@@ -19,12 +19,11 @@ interface ItemCardProps {
 export function ItemCard({ item }: ItemCardProps) {
   const displaySource = item.sourceRef?.name || item.source
   const dateObj = new Date(item.publishedAt)
-  const timeStr = dateObj.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-  const dateStr = dateObj.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+  const dateStr = dateObj.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
 
-  // 摘要最多150字
+  // 摘要最多200字
   const summaryText = item.summary
-    ? item.summary.slice(0, 150) + (item.summary.length > 150 ? '...' : '')
+    ? item.summary.slice(0, 200) + (item.summary.length > 200 ? '...' : '')
     : ''
 
   return (
@@ -34,7 +33,7 @@ export function ItemCard({ item }: ItemCardProps) {
         <div className="flex items-center justify-between mb-2.5">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11px] font-mono text-slate-400 tabular-nums">
-              {timeStr}
+              {dateStr}
             </span>
             <span className="text-[11px] text-slate-200">|</span>
             <span className="text-[11px] font-medium text-slate-500 bg-slate-50 px-2 py-0.5 rounded">
@@ -52,16 +51,22 @@ export function ItemCard({ item }: ItemCardProps) {
         </div>
 
         {/* 标题 - 可点击跳转原文 */}
-        <a
-          href={item.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block text-[15px] font-semibold text-slate-900 hover:underline mb-2.5 leading-snug"
-        >
-          {item.title}
-        </a>
+        {item.url && item.url.startsWith('http') ? (
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block text-[15px] font-semibold text-slate-900 hover:underline mb-2.5 leading-snug"
+          >
+            {item.title}
+          </a>
+        ) : (
+          <span className="block text-[15px] font-semibold text-slate-900 mb-2.5 leading-snug">
+            {item.title}
+          </span>
+        )}
 
-        {/* 摘要 - 150字左右 */}
+        {/* 摘要 - 200字左右 */}
         {summaryText && (
           <p className="text-[13px] text-slate-500 leading-relaxed mb-3">
             {summaryText}
@@ -81,19 +86,16 @@ export function ItemCard({ item }: ItemCardProps) {
           </div>
         )}
 
-        {/* 底部：日期 + 关键词 */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {item.tags && item.tags.length > 0 && item.tags.map((tag) => (
-              <span
-                key={tag}
-                className="px-2 py-0.5 text-[10px] text-slate-400 bg-slate-50 rounded border border-slate-100 hover:bg-slate-100 transition cursor-default"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-          <span className="text-[10px] text-slate-300 flex-shrink-0">{dateStr}</span>
+        {/* 底部：关键词 */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {item.tags && item.tags.length > 0 && item.tags.map((tag) => (
+            <span
+              key={tag}
+              className="px-2 py-0.5 text-[10px] text-slate-400 bg-slate-50 rounded border border-slate-100 hover:bg-slate-100 transition cursor-default"
+            >
+              {tag}
+            </span>
+          ))}
         </div>
       </div>
     </article>
