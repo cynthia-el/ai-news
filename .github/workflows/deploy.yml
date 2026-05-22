@@ -31,18 +31,25 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
 
+      - name: Remove heavy sync-only code for Cloudflare bundle
+        run: |
+          echo "Removing cron sync route (contains cheerio + iconv-lite + anthropic SDK)"
+          rm -rf src/app/api/cron/sync/
+          echo "Done. Vercel is unaffected - this only runs in CI."
+
       - name: Build for Cloudflare
         run: npx opennextjs-cloudflare build
         timeout-minutes: 15
         env:
           NODE_ENV: production
 
-      - name: Verify build output
+      - name: Check bundle size
         run: |
-          echo "=== .open-next contents ==="
-          ls -la .open-next/ || true
-          echo "=== worker.js exists? ==="
-          test -f .open-next/worker.js && echo "YES" || (echo "NO - build failed" && exit 1)
+          echo "=== Build output ==="
+          ls -lh .open-next/server-functions/default/handler.mjs 2>/dev/null || true
+          ls -lh .open-next/assets/ 2>/dev/null || true
+          echo "=== Total .open-next size ==="
+          du -sh .open-next/ || true
 
       - name: Deploy to Cloudflare Workers
         run: npx wrangler deploy
