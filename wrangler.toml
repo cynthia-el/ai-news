@@ -5,16 +5,3 @@ compatibility_flags = ["nodejs_compat"]
 
 [assets]
 directory = ".open-next/assets"
-
-# 定时任务：每天凌晨2点自动同步
-[triggers]
-crons = ["0 2 * * *"]
-
-# R2 缓存桶（用于 Next.js ISR 缓存）
-[[r2_buckets]]
-binding = "NEXT_INC_CACHE_R2_BUCKET"
-bucket_name = "ai-news-aggregator-opennext-cache"
-
-# 图片优化
-[images]
-binding = "IMAGES"

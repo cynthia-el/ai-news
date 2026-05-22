@@ -41,12 +41,16 @@ jobs:
         run: |
           echo "=== .open-next contents ==="
           ls -la .open-next/ || true
-          echo "=== .open-next/assets contents ==="
-          ls -la .open-next/assets/ || true
           echo "=== worker.js exists? ==="
-          test -f .open-next/worker.js && echo "YES" || echo "NO"
+          test -f .open-next/worker.js && echo "YES" || (echo "NO - build failed" && exit 1)
 
       - name: Deploy to Cloudflare Workers
         run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+
+      - name: Print wrangler logs on failure
+        if: failure()
+        run: |
+          echo "=== Wrangler logs ==="
+          cat /home/runner/.config/.wrangler/logs/*.log 2>/dev/null || true
