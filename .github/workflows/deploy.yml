@@ -37,11 +37,16 @@ jobs:
         env:
           NODE_ENV: production
 
-      - name: List build output
-        run: ls -la .open-next/ || echo "No .open-next directory"
+      - name: Verify build output
+        run: |
+          echo "=== .open-next contents ==="
+          ls -la .open-next/ || true
+          echo "=== .open-next/assets contents ==="
+          ls -la .open-next/assets/ || true
+          echo "=== worker.js exists? ==="
+          test -f .open-next/worker.js && echo "YES" || echo "NO"
 
       - name: Deploy to Cloudflare Workers
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CF_API_TOKEN }}
-          command: deploy
+        run: npx wrangler deploy --verbose
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
