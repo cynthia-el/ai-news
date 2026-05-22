@@ -47,6 +47,6 @@ jobs:
           test -f .open-next/worker.js && echo "YES" || echo "NO"
 
       - name: Deploy to Cloudflare Workers
-        run: npx wrangler deploy --verbose
+        run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
