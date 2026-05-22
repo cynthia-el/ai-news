@@ -9,7 +9,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      NODE_ENV: production
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       LONGCAT_API_KEY: ${{ secrets.LONGCAT_API_KEY }}
       NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL || 'https://localhost' }}
@@ -35,6 +34,8 @@ jobs:
       - name: Build for Cloudflare
         run: npx opennextjs-cloudflare build
         timeout-minutes: 15
+        env:
+          NODE_ENV: production
 
       - name: List build output
         run: ls -la .open-next/ || echo "No .open-next directory"
