@@ -41,12 +41,19 @@ interface DateEntry {
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
-  'industry-news': '行业动态',
-  'new-products': '新品发布',
-  'design-trends': '设计趋势',
-  'policy': '政策法规',
-  'materials': '原材料',
-  'tips': '实用技巧',
+  policy: '政策监管',
+  market: '市场格局',
+  capital: '资本财务',
+  technology: '技术材料',
+  'supply-chain': '产业链',
+}
+
+const CATEGORY_COLORS: Record<string, string> = {
+  policy: 'text-rose-600 bg-rose-50 border-rose-200',
+  market: 'text-blue-600 bg-blue-50 border-blue-200',
+  capital: 'text-emerald-600 bg-emerald-50 border-emerald-200',
+  technology: 'text-violet-600 bg-violet-50 border-violet-200',
+  'supply-chain': 'text-amber-600 bg-amber-50 border-amber-200',
 }
 
 function formatDateFull(dateStr: string) {
@@ -200,7 +207,7 @@ export default function DailyPage() {
                   <div className="flex items-end justify-between">
                     <div>
                       <h1 className="text-5xl md:text-6xl font-black text-stone-900 tracking-tight leading-none mb-3">
-                        家居资讯日报
+                        家居战略资讯日报
                       </h1>
                       {dateInfo && (
                         <p className="text-base text-stone-500 font-medium">
@@ -210,7 +217,7 @@ export default function DailyPage() {
                     </div>
                     <div className="text-right hidden md:block">
                       <p className="text-xs text-stone-400 uppercase tracking-widest mb-1">Daily Briefing</p>
-                      <p className="text-sm text-stone-500 font-medium">{daily.items.length} 条精选</p>
+                      <p className="text-sm text-stone-500 font-medium">{daily.items.length} 条战略精选</p>
                     </div>
                   </div>
 
@@ -271,7 +278,7 @@ export default function DailyPage() {
                 {/* 报尾 */}
                 <footer className="mt-16 pt-8 border-t border-stone-200 text-center">
                   <p className="text-xs text-stone-400 uppercase tracking-widest">
-                    家居资讯日报 · 每日精选行业要闻
+                    家居战略资讯日报 · 每日精选行业要闻
                   </p>
                 </footer>
               </div>
@@ -296,6 +303,7 @@ export default function DailyPage() {
 /* ========== 日报专用资讯卡片 ========== */
 function DailyItemCard({ item }: { item: DailyItem }) {
   const displaySource = item.sourceRef?.name || item.source
+  const categoryClass = CATEGORY_COLORS[item.category] || 'text-stone-600 bg-stone-50 border-stone-200'
 
   return (
     <article className="group">
@@ -322,19 +330,21 @@ function DailyItemCard({ item }: { item: DailyItem }) {
         </p>
       )}
 
-      {/* AI 精选解读 */}
-      {item.reason && item.score >= 7 && (
+      {/* AI 战略解读 */}
+      {item.reason && item.score >= 6 && (
         <p className="text-[13px] text-stone-400 leading-relaxed mb-2 italic">
-          <span className="text-stone-500 not-italic font-medium">AI 精选解读：</span>
+          <span className="text-stone-500 not-italic font-medium">战略解读：</span>
           {item.reason}
         </p>
       )}
 
       {/* 元信息 */}
-      <div className="flex items-center gap-2 text-[11px] text-stone-400">
+      <div className="flex items-center gap-2 text-[11px] text-stone-400 flex-wrap">
         <span>{displaySource}</span>
         <span>·</span>
-        <span>{CATEGORY_LABELS[item.category] || item.category}</span>
+        <span className={`px-1.5 py-0.5 rounded border ${categoryClass}`}>
+          {CATEGORY_LABELS[item.category] || item.category}
+        </span>
         {item.tags.length > 0 && (
           <>
             <span>·</span>

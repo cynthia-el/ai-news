@@ -1,4 +1,4 @@
-export type SourceType = 'WEB' | 'RSS' | 'API' | 'WECHAT_RSS' | 'MANUAL'
+export type SourceType = 'WEB' | 'RSS' | 'API' | 'WECHAT_RSS' | 'SOGOU_WECHAT' | 'MANUAL'
 
 export interface RawItem {
   title: string

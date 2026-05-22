@@ -65,7 +65,7 @@ export async function addManualItem(input: ManualItemInput): Promise<boolean> {
       summary: aiResult.summary,
       reason: aiResult.reason,
       score: aiResult.score,
-      isSelected: aiResult.score >= 7,
+      isSelected: aiResult.score >= 6,
     },
   })
 

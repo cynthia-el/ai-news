@@ -27,12 +27,10 @@ async function fetchHtmlWithEncoding(url: string, timeout = 10000): Promise<stri
 
     const buffer = Buffer.from(await res.arrayBuffer())
 
-    // 从Content-Type头中检测编码
     const contentType = res.headers.get('content-type') || ''
     const charsetMatch = contentType.match(/charset=([\w-]+)/i)
     let encoding = charsetMatch ? charsetMatch[1].toLowerCase() : 'utf-8'
 
-    // 如果header没有指定或指定为utf-8，检查HTML meta标签
     if (encoding === 'utf-8') {
       const metaCheck = buffer.toString('ascii', 0, Math.min(4096, buffer.length))
       const metaMatch = metaCheck.match(/<meta[^>]+charset=["']?([\w-]+)/i)
@@ -41,7 +39,6 @@ async function fetchHtmlWithEncoding(url: string, timeout = 10000): Promise<stri
       }
     }
 
-    // 使用iconv-lite解码非UTF-8编码
     if (encoding !== 'utf-8' && encoding !== 'utf8') {
       return iconv.decode(buffer, encoding)
     }
@@ -52,32 +49,104 @@ async function fetchHtmlWithEncoding(url: string, timeout = 10000): Promise<stri
   }
 }
 
-/** 通用详情页爬取：不依赖CSS选择器配置 */
-async function fetchArticleContent(url: string): Promise<string> {
+/** 从详情页HTML中提取发布日期 */
+function extractDateFromHtml(html: string): Date | null {
   try {
-    const html = await fetchHtmlWithEncoding(url, 10000)
-    if (!html) return ''
     const $ = cheerio.load(html)
 
-    // 移除无关元素
+    const metaSelectors = [
+      'meta[property="article:published_time"]',
+      'meta[name="pubdate"]',
+      'meta[name="publishdate"]',
+      'meta[name="PublishDate"]',
+      'meta[http-equiv="Date"]',
+    ]
+    for (const sel of metaSelectors) {
+      const val = $(sel).attr('content')
+      if (val) {
+        const d = new Date(val.trim())
+        if (!isNaN(d.getTime())) return d
+      }
+    }
+
+    const timeVal = $('time').first().attr('datetime') || $('time').first().text()
+    if (timeVal) {
+      const d = new Date(timeVal.trim())
+      if (!isNaN(d.getTime())) return d
+    }
+
+    const dateSelectors = [
+      '.pub-date', '.publish-time', '.post-date', '.article-date', '.news-date',
+      '.date', '.time', '[class*="pub"]', '[class*="date"]', '[class*="time"]',
+    ]
+    for (const sel of dateSelectors) {
+      const text = $(sel).first().text().trim()
+      if (text) {
+        const cnMatch = text.match(/(\d{4})\s*[年/\-.]\s*(\d{1,2})\s*[月/\-.]\s*(\d{1,2})/)
+        if (cnMatch) {
+          const d = new Date(`${cnMatch[1]}-${cnMatch[2].padStart(2, '0')}-${cnMatch[3].padStart(2, '0')}`)
+          if (!isNaN(d.getTime())) return d
+        }
+        const isoMatch = text.match(/(\d{4}-\d{2}-\d{2})/)
+        if (isoMatch) {
+          const d = new Date(isoMatch[1])
+          if (!isNaN(d.getTime())) return d
+        }
+      }
+    }
+
+    const bodyText = $('body').text()
+    const datePatterns = [
+      { pattern: /(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日[\s\d:]*发布/, hasGroups: true },
+      { pattern: /(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日[\s\d:]*/, hasGroups: true },
+      { pattern: /发布时间[\s：:]\s*(\d{4}-\d{2}-\d{2})/, hasGroups: false },
+      { pattern: /发布日期[\s：:]\s*(\d{4}-\d{2}-\d{2})/, hasGroups: false },
+      { pattern: /(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})/, hasGroups: false },
+      { pattern: /(\d{4}-\d{2}-\d{2})/, hasGroups: false },
+    ]
+    for (const { pattern, hasGroups } of datePatterns) {
+      const match = bodyText.match(pattern)
+      if (match) {
+        let dateStr = match[1]
+        if (hasGroups && match[2]) dateStr += `-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`
+        const d = new Date(dateStr)
+        if (!isNaN(d.getTime())) return d
+      }
+    }
+
+    const infoSelectors = ['.info', '.source', '.meta', '.article-info', '.post-meta', '[class*="info"]', '[class*="meta"]']
+    for (const sel of infoSelectors) {
+      const text = $(sel).first().text()
+      const infoMatch = text.match(/(\d{4})\s*[年/\-.]\s*(\d{1,2})\s*[月/\-.]\s*(\d{1,2})/)
+        || text.match(/(\d{4}-\d{2}-\d{2})/)
+      if (infoMatch) {
+        let dateStr = infoMatch[1]
+        if (infoMatch[2]) dateStr += `-${infoMatch[2].padStart(2, '0')}-${infoMatch[3].padStart(2, '0')}`
+        const d = new Date(dateStr)
+        if (!isNaN(d.getTime())) return d
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null
+}
+
+/** 通用详情页爬取：不依赖CSS选择器配置，同时提取正文和日期 */
+async function fetchArticleDetail(url: string): Promise<{ content: string; date: Date | null }> {
+  try {
+    const html = await fetchHtmlWithEncoding(url, 10000)
+    if (!html) return { content: '', date: null }
+
+    const date = extractDateFromHtml(html)
+    const $ = cheerio.load(html)
+
     $('script, style, nav, header, footer, aside, .ad, .advertisement, .related-read, .comments, iframe, .sidebar').remove()
 
-    // 尝试多种正文选择器
     const selectors = [
-      'article',
-      '.article-content',
-      '.content-detail',
-      '#artibody',
-      '.post-content',
-      '.entry-content',
-      '.news-content',
-      '.detail-content',
-      '.main-content',
-      '[class*="content"]',
-      '[class*="article"]',
-      'main',
-      '.text',
-      '.txt',
+      'article', '.article-content', '.content-detail', '#artibody', '.post-content',
+      '.entry-content', '.news-content', '.detail-content', '.main-content',
+      '[class*="content"]', '[class*="article"]', 'main', '.text', '.txt',
     ]
 
     for (const sel of selectors) {
@@ -85,146 +154,276 @@ async function fetchArticleContent(url: string): Promise<string> {
       if (el.length) {
         const text = el.text().trim()
         if (text.length > 200) {
-          return text.slice(0, 5000)
+          return { content: text.slice(0, 5000), date }
         }
       }
     }
 
-    // 兜底：取body中较长的段落
     let bestText = ''
     $('p').each((_, p) => {
       const t = $(p).text().trim()
       if (t.length > bestText.length) bestText = t
     })
-    return bestText.slice(0, 5000)
+    return { content: bestText.slice(0, 5000), date }
   } catch {
-    return ''
+    return { content: '', date: null }
   }
 }
 
 const BATCH_SIZE = 12
 
-// 采购/招商/广告硬过滤关键词（即使AI给了高分也拒绝进入精选）
-const PROCUREMENT_KEYWORDS = ['需要采购', '求购', '询价', '诚招代理', '诚招全国', '厂家招商', '品牌招商', '我要代理', '加盟热线', '招商加盟']
-const PROCUREMENT_WEAK = ['咨询', '采购', '招商', '加盟']
+// ============================================================
+// 硬过滤规则 — 消费端低质量内容一票否决
+// ============================================================
 
+/** 消费端技巧类关键词 */
+const CONSUMER_KEYWORDS = [
+  '避坑', '翻车', '技巧', '攻略', '教程', '怎么选', '多少钱',
+  '如何选', '手把手', '新手', '小白', '踩雷', '智商税',
+  '后悔', '被坑', '血泪', '教训', '维权', '投诉',
+]
+
+/** 个体案例/投诉类关键词 */
+const CASE_KEYWORDS = [
+  '网友', '业主', '消费者', '客户', '师傅', '工人',
+  '装修队', '游击队', '偷工减料',
+]
+
+/** 地方性微观调研关键词 */
+const LOCAL_SURVEY_KEYWORDS = [
+  '西宁', '兰州', '银川', '拉萨', '呼和浩特',
+  '某三线城市', '某四线城市', '某县城', '某小区',
+]
+
+/** 广告/软文/招商关键词 */
+const AD_KEYWORDS = [
+  '需要采购', '求购', '询价', '诚招代理', '诚招全国',
+  '厂家招商', '品牌招商', '我要代理', '加盟热线',
+  '招商加盟', '限时优惠', '选XX就对了', '最好',
+]
+
+/** 硬过滤：消费端低质量内容一票否决 */
+function isLowQualityConsumerContent(title: string, content: string): boolean {
+  const text = `${title} ${content || ''}`
+
+  // 1. 消费端技巧类一票否决
+  for (const kw of CONSUMER_KEYWORDS) {
+    if (title.includes(kw)) return true
+  }
+
+  // 2. 个体案例/投诉（标题特征）
+  const casePatterns = [
+    /某网友.*翻车/, /某业主.*投诉/, /新房.*翻车/, /装修.*售后/,
+    /质量.*投诉/, /售后.*差/, /师傅.*不会/, /工人.*偷懒/,
+    /装修队.*坑/, /游击队.*坑/,
+  ]
+  for (const pattern of casePatterns) {
+    if (pattern.test(title)) return true
+  }
+
+  // 3. 地方性微观调研（标题明确限定单一小城市且无全国性推导）
+  const localPatterns = [
+    /西宁.*家庭.*装修/, /兰州.*家庭.*调研/, /某三线城市.*分析/,
+    /某县城.*调研/, /某小区.*装修/,
+  ]
+  for (const pattern of localPatterns) {
+    if (pattern.test(title)) return true
+  }
+
+  // 4. 广告/软文/招商
+  for (const kw of AD_KEYWORDS) {
+    if (title.includes(kw)) return true
+  }
+  if (title.startsWith('咨询') && title.length < 30) return true
+  if (title.includes('十大品牌') && (title.includes('排名') || title.includes('评测'))) return true
+
+  // 5. 纯C端消费指南（标题开头特征）
+  const consumerStartPatterns = [
+    /^如何/, /^怎么/, /^教你/, /^新手/, /^小白/,
+    /^签合同/, /^验收/, /^选.*板材/, /^选.*地板/,
+    /^装修.*注意/, /^装修.*细节/,
+  ]
+  for (const pattern of consumerStartPatterns) {
+    if (pattern.test(title)) return true
+  }
+
+  return false
+}
+
+/** B2B采购/招商类硬过滤 */
 function isProcurementOrAd(title: string): boolean {
   const t = title.trim()
-  // 强匹配：直接拒绝
-  if (PROCUREMENT_KEYWORDS.some(kw => t.includes(kw))) return true
-  // 弱匹配：标题以"咨询"开头（大概率是B2B询价）
+  const procurementKws = ['需要采购', '求购', '询价', '诚招代理', '诚招全国', '厂家招商', '品牌招商', '我要代理', '加盟热线', '招商加盟']
+  if (procurementKws.some(kw => t.includes(kw))) return true
   if (t.startsWith('咨询') && t.length < 30) return true
-  // 弱匹配：包含"十大品牌"（通常是软文排行榜）
   if (t.includes('十大品牌') && (t.includes('排名') || t.includes('评测') || t.includes('综合'))) return true
   return false
 }
 
-async function processCrawledItems(rawItems: RawItem[]) {
+async function processCrawledItems(rawItems: RawItem[], crawlStartTime: Date) {
   let added = 0
   let skipped = 0
   let failed = 0
+  let consumerFiltered = 0
+  let adFiltered = 0
 
-  // 1. 去重
   console.log(`\n[去重] 原始资讯 ${rawItems.length} 条`)
   const { unique } = dedupItems(rawItems)
   console.log(`[去重] 去重后 ${unique.length} 条`)
 
-  // 1.5 智能日期过滤
-  const now = new Date()
-  const cutoff48h = new Date(now.getTime() - 48 * 60 * 60 * 1000)
-  const cutoff7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-  const futureCutoff = new Date(now.getTime() + 24 * 60 * 60 * 1000)
-
-  const recentItems = unique.filter((item) => {
-    const date = item.publishedAt
-    if (!date) return false
-    const d = new Date(date)
-
-    // 情况A：有真实日期（非fallback）→ 严格48小时
-    // 判断是否为fallback：如果publishedAt距离现在小于5分钟，可能是fallback
-    const isFallback = now.getTime() - d.getTime() < 5 * 60 * 1000
-
-    if (!isFallback) {
-      return d >= cutoff48h && d <= futureCutoff
+  // 第一步：硬过滤消费端低质量内容
+  const afterHardFilter = unique.filter((item) => {
+    if (isLowQualityConsumerContent(item.title, item.content)) {
+      consumerFiltered++
+      return false
     }
+    if (isProcurementOrAd(item.title)) {
+      adFiltered++
+      return false
+    }
+    return true
+  })
+  console.log(`[硬过滤] 消费端低质量内容: ${consumerFiltered} 条, 广告/招商: ${adFiltered} 条, 保留: ${afterHardFilter.length} 条`)
 
-    // 情况B：fallback日期（列表页无日期）→ 用标题/URL做旧文检测
+  const now = new Date()
+  const cutoff72h = new Date(now.getTime() - 72 * 60 * 60 * 1000)
+  const futureCutoff = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+  const currentYear = now.getFullYear()
+
+  let yearFiltered = 0
+  const afterYearCheck = afterHardFilter.filter((item) => {
     const title = item.title
     const url = item.url
 
-    // 检测标题中的旧年份（如"2024"、"2023"且不是当前年）
     const yearMatches = title.match(/\b(20\d{2})\b/g)
     if (yearMatches) {
       for (const ym of yearMatches) {
         const y = parseInt(ym, 10)
-        if (y < now.getFullYear() - 1) return false // 早于去年的内容
-        if (y === now.getFullYear() - 1 && !title.includes('年报') && !title.includes('回顾')) return false
+        if (y < currentYear - 1) { yearFiltered++; return false }
+        if (y === currentYear - 1 && !title.includes('年报') && !title.includes('回顾')) { yearFiltered++; return false }
       }
     }
 
-    // 检测URL中的旧年份
-    const urlYearMatch = url.match(/\/(20\d{2})[\/-]/)
+    const urlYearMatch = url.match(/\/(20\d{2})[\/\-]/)
     if (urlYearMatch) {
       const urlYear = parseInt(urlYearMatch[1], 10)
-      if (urlYear < now.getFullYear()) return false
+      if (urlYear < currentYear) { yearFiltered++; return false }
     }
 
-    // 检测明显的旧文/回顾关键词
-    const oldKeywords = ['回顾', '盘点', '年报', '去年', '前年', '往届', '历届', '往届回顾']
-    if (oldKeywords.some(kw => title.includes(kw))) return false
+    const oldKeywords = ['回顾', '盘点', '去年', '前年', '往届', '历届', '往届回顾']
+    if (oldKeywords.some(kw => title.includes(kw))) { yearFiltered++; return false }
 
-    // fallback条目放宽到7天
     return true
   })
-  console.log(`[日期过滤] 保留: ${recentItems.length} 条 (排除 ${unique.length - recentItems.length} 条陈旧)`)
+  console.log(`[年份检测] 保留: ${afterYearCheck.length} 条 (排除 ${yearFiltered} 条旧文)`)
+
+  let timeFiltered = 0
+  const recentItems = afterYearCheck.filter((item) => {
+    const date = item.publishedAt
+    if (!date) { timeFiltered++; return false }
+    const d = new Date(date)
+
+    const isFallback = Math.abs(d.getTime() - crawlStartTime.getTime()) < 2 * 60 * 1000
+    if (!isFallback) {
+      const ok = d >= cutoff72h && d <= futureCutoff
+      if (!ok) timeFiltered++
+      return ok
+    }
+
+    const ok = d >= cutoff72h && d <= futureCutoff
+    if (!ok) timeFiltered++
+    return ok
+  })
+  console.log(`[日期过滤] 保留: ${recentItems.length} 条 (排除 ${timeFiltered} 条超期)`)
 
   if (recentItems.length === 0) {
-    return { added: 0, skipped: 0, failed: 0, sourceStats: {} }
+    return { added: 0, skipped: 0, failed: 0, consumerFiltered, adFiltered, sourceStats: {} }
   }
 
-  // 2. 加载信源映射（name -> id / config）
   const sources = await loadActiveSources()
   const sourceMap = new Map<string, string>()
-  const sourceConfigMap = new Map<string, string | null>()
   for (const s of sources) {
     sourceMap.set(s.name, s.id)
-    sourceConfigMap.set(s.name, s.config)
   }
 
-  // 2.5 对内容过短的条目爬取详情页
   let detailCrawled = 0
-  const maxDetailCrawl = recentItems.length
+  let dateCorrected = 0
+  let dateFailed = 0
   for (const item of recentItems) {
-    if (item.content.length >= 300) continue
-    if (detailCrawled >= maxDetailCrawl) break
+    const d = new Date(item.publishedAt)
+    const isFallback = Math.abs(d.getTime() - crawlStartTime.getTime()) < 2 * 60 * 1000
+    if (!isFallback) continue
 
     try {
-      console.log(`  [详情页] ${item.title.slice(0, 40)}...`)
-      const detailContent = await fetchArticleContent(item.url)
-      if (detailContent && detailContent.length > item.content.length + 100) {
-        item.content = detailContent.slice(0, 5000)
+      const detail = await fetchArticleDetail(item.url)
+      if (detail.content && item.content.length < 300 && detail.content.length > item.content.length + 100) {
+        item.content = detail.content.slice(0, 5000)
+      }
+      if (detail.content && detail.content.length > 200) {
         detailCrawled++
       }
+      if (detail.date) {
+        const oldDate = item.publishedAt
+        item.publishedAt = detail.date
+        dateCorrected++
+        console.log(`  [日期修正] ${item.title.slice(0, 35)}... ${oldDate?.toISOString().slice(0,10)} → ${detail.date.toISOString().slice(0,10)}`)
+      } else {
+        dateFailed++
+        item.publishedAt = null as any
+      }
     } catch {
-      // 详情页爬取失败，忽略
+      dateFailed++
+      item.publishedAt = null as any
     }
   }
-  if (detailCrawled > 0) {
-    console.log(`[详情页] 成功爬取 ${detailCrawled} 条详情页内容`)
+  if (detailCrawled > 0 || dateCorrected > 0) {
+    console.log(`[详情页] 爬取 ${detailCrawled} 条，修正 ${dateCorrected} 条日期，${dateFailed} 条无法获取日期`)
   }
 
-  // 3. 批量AI处理（分批次）
-  console.log(`\n[AI处理] 开始批量分类评分，每批 ${BATCH_SIZE} 条`)
+  let postDetailFiltered = 0
+  const finalRecentItems = recentItems.filter((item) => {
+    const date = item.publishedAt
+    if (!date) { postDetailFiltered++; return false }
+    const d = new Date(date)
+
+    const isFallback = Math.abs(d.getTime() - crawlStartTime.getTime()) < 2 * 60 * 1000
+    if (!isFallback) {
+      const ok = d >= cutoff72h && d <= futureCutoff
+      if (!ok) postDetailFiltered++
+      return ok
+    }
+    const ok = d >= cutoff72h && d <= futureCutoff
+    if (!ok) postDetailFiltered++
+    return ok
+  })
+  if (postDetailFiltered > 0) {
+    console.log(`[二次过滤] 详情页修正后排除 ${postDetailFiltered} 条超期，保留 ${finalRecentItems.length} 条`)
+  }
+
+  // 二次硬过滤：爬取详情后再次检查内容
+  let postCrawlConsumerFiltered = 0
+  const afterPostCrawlFilter = finalRecentItems.filter((item) => {
+    if (isLowQualityConsumerContent(item.title, item.content)) {
+      postCrawlConsumerFiltered++
+      return false
+    }
+    return true
+  })
+  if (postCrawlConsumerFiltered > 0) {
+    console.log(`[二次硬过滤] 详情页内容检查后排除 ${postCrawlConsumerFiltered} 条低质量内容`)
+  }
+
+  console.log(`\n[AI处理] 开始五维评分筛选，每批 ${BATCH_SIZE} 条`)
 
   const allResults: { raw: RawItem; category: string; summary: string; score: number; tags: string[] }[] = []
 
-  for (let i = 0; i < recentItems.length; i += BATCH_SIZE) {
-    const batch = recentItems.slice(i, i + BATCH_SIZE)
-    console.log(`  处理批次 ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(recentItems.length / BATCH_SIZE)} (${batch.length} 条)`)
+  for (let i = 0; i < afterPostCrawlFilter.length; i += BATCH_SIZE) {
+    const batch = afterPostCrawlFilter.slice(i, i + BATCH_SIZE)
+    console.log(`  处理批次 ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(afterPostCrawlFilter.length / BATCH_SIZE)} (${batch.length} 条)`)
 
     try {
       const batchResults = await batchClassify(
-        batch.map((item) => ({ title: item.title, content: item.content }))
+        batch.map((item) => ({ title: item.title, content: item.content, source: item.source, publishedAt: item.publishedAt }))
       )
 
       for (let j = 0; j < batch.length; j++) {
@@ -240,28 +439,26 @@ async function processCrawledItems(rawItems: RawItem[]) {
         }
       }
 
-      // 避免请求过快
-      if (i + BATCH_SIZE < recentItems.length) {
+      if (i + BATCH_SIZE < afterPostCrawlFilter.length) {
         await new Promise((resolve) => setTimeout(resolve, 800))
       }
     } catch (error) {
       console.error(`  ✗ 批次处理失败:`, (error as Error).message)
-      // 批次失败时，全部按默认值处理
       for (const item of batch) {
         allResults.push({
           raw: item,
-          category: 'industry-news',
+          category: 'market',
           summary: item.title.slice(0, 30),
           score: 5,
-          tags: [],
+          tags: ['全屋定制', '中性'],
         })
       }
     }
   }
 
-  // 4. 对高分条目生成深度推荐理由
-  const highScoreItems = allResults.filter((r) => r.score >= 7)
-  console.log(`\n[推荐理由] ${highScoreItems.length} 条高分条目需要生成深度推荐理由`)
+  // 评分>=6分生成战略解读
+  const highScoreItems = allResults.filter((r) => r.score >= 6)
+  console.log(`\n[战略解读] ${highScoreItems.length} 条评分≥6分条目需要生成深度解读`)
 
   const reasonsMap = new Map<number, string>()
   if (highScoreItems.length > 0) {
@@ -273,43 +470,57 @@ async function processCrawledItems(rawItems: RawItem[]) {
         )
         for (let j = 0; j < batch.length; j++) {
           const idx = allResults.indexOf(batch[j])
-          reasonsMap.set(idx, reasons[j] || '行业相关资讯，值得关注')
+          reasonsMap.set(idx, reasons[j] || '行业战略资讯，建议关注')
         }
         if (i + BATCH_SIZE < highScoreItems.length) {
           await new Promise((resolve) => setTimeout(resolve, 600))
         }
       } catch (error) {
-        console.error(`  ✗ 推荐理由生成失败:`, (error as Error).message)
+        console.error(`  ✗ 战略解读生成失败:`, (error as Error).message)
       }
     }
   }
 
-  // 5. 存储到数据库（应用采购/招商硬过滤）
   console.log(`\n[存储] 开始写入数据库`)
 
   const sourceStats: Record<string, { fetched: number; added: number; failed: number }> = {}
-  let procurementFiltered = 0
+  let scoreAdjusted = 0
 
   for (let i = 0; i < allResults.length; i++) {
     let { raw, category, summary, score, tags } = allResults[i]
     let finalScore = score
 
-    // 硬过滤：采购/招商/广告类内容强制降分
+    // 最终硬过滤：采购/招商类强制降分
     if (isProcurementOrAd(raw.title)) {
-      finalScore = Math.min(finalScore, 3)
-      procurementFiltered++
+      finalScore = Math.min(finalScore, 2)
+      scoreAdjusted++
     }
 
-    const reason = reasonsMap.get(i) || (finalScore >= 7 ? '行业相关资讯，值得关注' : '行业相关资讯')
-    const isSelected = finalScore >= 7
+    // 内容平衡调整：战略相关性强的内容上浮
+    const strategicKeywords = ['人造板', '刨花板', '胶合板', '纤维板', 'OSB', '饰面板', '定制家居', '全屋定制', '高定', '智能家居', '陶瓷', '卫浴', '门窗', '厨卫', '家具', '板材', '木业', '建材家居', '绿色建材', '双碳', '负碳', 'ENF', '装配式', '木结构']
+    const isStrategicContent = strategicKeywords.some(kw => raw.title.includes(kw) || raw.content.includes(kw))
+    const isRealEstateOnly = (raw.source === '房地产市场' || raw.source === '房地产研究') && !isStrategicContent
 
-    // 初始化统计
+    if (isStrategicContent && finalScore < 10) {
+      finalScore += 0.5
+      scoreAdjusted++
+    }
+    if (isRealEstateOnly && finalScore > 1) {
+      finalScore -= 1
+      scoreAdjusted++
+    }
+
+    finalScore = Math.round(finalScore * 10) / 10
+    finalScore = Math.max(1, Math.min(10, finalScore))
+
+    const reason = reasonsMap.get(i) || (finalScore >= 6 ? '行业战略资讯，建议关注' : '行业相关资讯')
+    const isSelected = finalScore >= 6
+
     if (!sourceStats[raw.source]) {
       sourceStats[raw.source] = { fetched: 0, added: 0, failed: 0 }
     }
     sourceStats[raw.source].fetched++
 
-    // 检查是否已存在
     try {
       const exists = await prisma.item.findUnique({
         where: { url: raw.url },
@@ -320,7 +531,18 @@ async function processCrawledItems(rawItems: RawItem[]) {
         continue
       }
 
-      // 存储
+      // 标题去重：最近7天内相同标题视为重复
+      const recentSameTitle = await prisma.item.findFirst({
+        where: {
+          title: { equals: raw.title, mode: 'insensitive' },
+          publishedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+        },
+      })
+      if (recentSameTitle) {
+        skipped++
+        continue
+      }
+
       await prisma.item.create({
         data: {
           title: raw.title,
@@ -349,19 +571,18 @@ async function processCrawledItems(rawItems: RawItem[]) {
     }
   }
 
-  if (procurementFiltered > 0) {
-    console.log(`  [硬过滤] 采购/招商类强制降分: ${procurementFiltered} 条`)
+  if (scoreAdjusted > 0) {
+    console.log(`  [分数调整] ${scoreAdjusted} 条因内容特征调整评分`)
   }
 
   console.log(`\n处理结果: 新增 ${added} 条, 跳过 ${skipped} 条, 失败 ${failed} 条`)
-  return { added, skipped, failed, sourceStats }
+  return { added, skipped, failed, consumerFiltered, adFiltered, sourceStats }
 }
 
 async function generateDaily() {
   const today = new Date().toISOString().split('T')[0]
   console.log(`\n📰 开始生成日报: ${today}`)
 
-  // 获取最近24小时的精选内容
   const yesterday = new Date()
   yesterday.setDate(yesterday.getDate() - 1)
 
@@ -371,7 +592,7 @@ async function generateDaily() {
       publishedAt: { gte: yesterday },
     },
     orderBy: { score: 'desc' },
-    take: 7,
+    take: 10,
   })
 
   if (items.length === 0) {
@@ -381,23 +602,21 @@ async function generateDaily() {
 
   console.log(`  找到 ${items.length} 条精选内容`)
 
-  // 生成日报结构
   const dailyResult = await generateDailyWithSections(
     items.map((item) => ({
       title: item.title,
       summary: item.summary || item.title,
       category: item.category,
+      tags: item.tags,
     }))
   )
 
-  // 按分类分组
   const categoryGroups: Record<string, typeof items> = {}
   for (const item of items) {
     if (!categoryGroups[item.category]) categoryGroups[item.category] = []
     categoryGroups[item.category].push(item)
   }
 
-  // 构建版块数据
   const sectionsData = dailyResult.sections
     .filter((s) => categoryGroups[s.category] && categoryGroups[s.category].length > 0)
     .map((s) => ({
@@ -408,7 +627,6 @@ async function generateDaily() {
       order: Object.keys(categoryGroups).indexOf(s.category),
     }))
 
-  // 如果没有AI返回的版块，手动创建
   if (sectionsData.length === 0) {
     for (const [category, group] of Object.entries(categoryGroups)) {
       sectionsData.push({
@@ -421,18 +639,15 @@ async function generateDaily() {
     }
   }
 
-  // 检查是否已存在今日日报
   const exists = await prisma.daily.findUnique({
     where: { date: today },
   })
 
   if (exists) {
-    // 删除旧版块
     await prisma.dailySection.deleteMany({
       where: { dailyId: exists.id },
     })
 
-    // 更新日报
     await prisma.daily.update({
       where: { id: exists.id },
       data: {
@@ -444,7 +659,6 @@ async function generateDaily() {
       },
     })
 
-    // 创建新版块
     for (const section of sectionsData) {
       await prisma.dailySection.create({
         data: {
@@ -460,7 +674,6 @@ async function generateDaily() {
 
     console.log(`  ✓ 日报已更新: ${dailyResult.title} (${sectionsData.length} 个版块)`)
   } else {
-    // 创建日报
     const daily = await prisma.daily.create({
       data: {
         date: today,
@@ -472,7 +685,6 @@ async function generateDaily() {
       },
     })
 
-    // 创建版块
     for (const section of sectionsData) {
       await prisma.dailySection.create({
         data: {
@@ -494,11 +706,11 @@ async function generateDaily() {
 
 async function main() {
   console.log('╔══════════════════════════════════════════╗')
-  console.log('║      家居建材AI资讯 - 智能同步工具        ║')
+  console.log('║      家居战略资讯日报 - 智能同步工具        ║')
+  console.log('║    面向CEO/战略发展部的决策级内容筛选       ║')
   console.log('╚══════════════════════════════════════════╝')
   console.log(`\n开始时间: ${new Date().toLocaleString('zh-CN')}`)
 
-  // 创建采集日志记录
   const crawlLog = await prisma.crawlLog.create({
     data: {
       status: 'running',
@@ -506,13 +718,13 @@ async function main() {
     },
   })
 
+  const crawlStartTime = new Date()
   let rawItems: RawItem[] = []
-  let result = { added: 0, skipped: 0, failed: 0, sourceStats: {} as Record<string, { fetched: number; added: number; failed: number }> }
+  let result = { added: 0, skipped: 0, failed: 0, consumerFiltered: 0, adFiltered: 0, sourceStats: {} as Record<string, { fetched: number; added: number; failed: number }> }
   let dailyGenerated = false
   let errorMessage: string | null = null
 
   try {
-    // 第1步：加载信源并爬取
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
     console.log('📡 第1步：加载信源并爬取')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
@@ -537,18 +749,15 @@ async function main() {
       return
     }
 
-    // 第2步：AI处理与存储
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-    console.log('🤖 第2步：AI处理与存储')
+    console.log('🤖 第2步：五维评分筛选与存储')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
-    result = await processCrawledItems(rawItems)
+    result = await processCrawledItems(rawItems, crawlStartTime)
 
-    // 第3步：生成日报
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
     dailyGenerated = await generateDaily()
 
-    // 更新采集日志
     await prisma.crawlLog.update({
       where: { id: crawlLog.id },
       data: {
@@ -564,11 +773,12 @@ async function main() {
       },
     })
 
-    // 汇总
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
     console.log('📊 同步完成')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
     console.log(`  爬取资讯: ${rawItems.length} 条`)
+    console.log(`  消费端过滤: ${result.consumerFiltered} 条`)
+    console.log(`  广告/招商过滤: ${result.adFiltered} 条`)
     console.log(`  新增入库: ${result.added} 条`)
     console.log(`  重复跳过: ${result.skipped} 条`)
     console.log(`  处理失败: ${result.failed} 条`)

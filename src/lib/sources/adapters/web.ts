@@ -149,7 +149,7 @@ export class WebAdapter implements SourceAdapter {
         const el = $(element)
         const titleEl = el.find(cfg.itemSelector!.title).first()
         const title = titleEl.text().trim()
-        const link = titleEl.attr('href') || el.find(cfg.itemSelector!.link).first().attr('href') || ''
+        const link = titleEl.attr('href') || el.find(cfg.itemSelector!.link).first().attr('href') || el.attr('href') || ''
         const summary = cfg.itemSelector!.summary
           ? el.find(cfg.itemSelector!.summary).first().text().trim()
           : ''

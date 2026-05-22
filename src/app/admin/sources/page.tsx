@@ -25,12 +25,11 @@ const SOURCE_TYPES = [
 
 const CATEGORY_OPTIONS = [
   { value: '', label: '不指定' },
-  { value: 'industry-news', label: '行业动态' },
-  { value: 'new-products', label: '新品发布' },
-  { value: 'design-trends', label: '设计趋势' },
-  { value: 'policy', label: '政策法规' },
-  { value: 'materials', label: '原材料' },
-  { value: 'tips', label: '实用技巧' },
+  { value: 'policy', label: '政策监管' },
+  { value: 'market', label: '市场格局' },
+  { value: 'capital', label: '资本财务' },
+  { value: 'technology', label: '技术材料' },
+  { value: 'supply-chain', label: '产业链' },
 ]
 
 export default function SourcesAdminPage() {

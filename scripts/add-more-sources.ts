@@ -1,11 +1,9 @@
 import { PrismaClient } from '@prisma/client'
-import { PrismaPg } from '@prisma/adapter-pg'
-import { Pool } from 'pg'
+import { PrismaNeon } from '@prisma/adapter-neon'
 
-const REMOTE_DATABASE_URL = 'postgresql://neondb_owner:npg_g8ASiRe1LNpM@ep-holy-meadow-aqvv4kth-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require'
+const REMOTE_DATABASE_URL = process.env.DATABASE_URL || ''
 
-const pool = new Pool({ connectionString: REMOTE_DATABASE_URL, ssl: false })
-const adapter = new PrismaPg(pool)
+const adapter = new PrismaNeon({ connectionString: REMOTE_DATABASE_URL })
 const prisma = new PrismaClient({ adapter })
 
 const MORE_KEYWORDS = [

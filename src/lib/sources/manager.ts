@@ -3,12 +3,14 @@ import { CrawlResult, RawItem, SourceAdapter, SourceType } from './types'
 import { WebAdapter } from './adapters/web'
 import { RssAdapter } from './adapters/rss'
 import { WechatRssAdapter } from './adapters/wechat-rss'
+import { WechatSogouAdapter } from './adapters/wechat-sogou'
 import { ApiAdapter } from './adapters/api'
 
 const adapters: Record<SourceType, SourceAdapter> = {
   WEB: new WebAdapter(),
   RSS: new RssAdapter(),
   WECHAT_RSS: new WechatRssAdapter(),
+  SOGOU_WECHAT: new WechatSogouAdapter(),
   API: new ApiAdapter(),
   MANUAL: new RssAdapter(), // MANUAL 不通过爬虫获取
 }

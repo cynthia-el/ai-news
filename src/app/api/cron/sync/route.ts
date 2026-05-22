@@ -9,17 +9,42 @@ const BATCH_SIZE = 12
 const CRON_SECRET = process.env.CRON_SECRET
 
 function authorize(request: NextRequest): boolean {
-  // 优先检查 header 中的 authorization
   const authHeader = request.headers.get('authorization')
   if (authHeader === `Bearer ${CRON_SECRET}`) return true
-
-  // 兼容 Vercel Cron 的默认请求（无 auth header）
-  // 生产环境建议始终设置 CRON_SECRET
   if (!CRON_SECRET) {
     console.warn('[Cron] CRON_SECRET 未设置，允许无认证请求（仅用于开发调试）')
     return true
   }
+  return false
+}
 
+/** 消费端低质量内容硬过滤 */
+function isLowQualityConsumerContent(title: string, content: string): boolean {
+  const consumerKeywords = [
+    '避坑', '翻车', '技巧', '攻略', '教程', '怎么选', '多少钱',
+    '如何选', '手把手', '新手', '小白', '踩雷', '智商税',
+    '后悔', '被坑', '血泪', '教训', '维权', '投诉',
+  ]
+  for (const kw of consumerKeywords) {
+    if (title.includes(kw)) return true
+  }
+  const consumerStartPatterns = [
+    /^如何/, /^怎么/, /^教你/, /^新手/, /^小白/,
+    /^签合同/, /^验收/, /^选.*板材/, /^选.*地板/,
+    /^装修.*注意/, /^装修.*细节/,
+  ]
+  for (const pattern of consumerStartPatterns) {
+    if (pattern.test(title)) return true
+  }
+  const adKeywords = [
+    '需要采购', '求购', '询价', '诚招代理', '诚招全国',
+    '厂家招商', '品牌招商', '我要代理', '加盟热线', '招商加盟',
+  ]
+  for (const kw of adKeywords) {
+    if (title.includes(kw)) return true
+  }
+  if (title.startsWith('咨询') && title.length < 30) return true
+  if (title.includes('十大品牌') && (title.includes('排名') || title.includes('评测'))) return true
   return false
 }
 
@@ -27,16 +52,27 @@ async function processCrawledItems(rawItems: RawItem[]) {
   let added = 0
   let skipped = 0
   let failed = 0
+  let consumerFiltered = 0
 
   console.log(`[Cron] 去重: 原始 ${rawItems.length} 条`)
   const { unique } = dedupItems(rawItems)
   console.log(`[Cron] 去重后: ${unique.length} 条`)
 
+  // 硬过滤消费端低质量内容
+  const afterHardFilter = unique.filter((item) => {
+    if (isLowQualityConsumerContent(item.title, item.content)) {
+      consumerFiltered++
+      return false
+    }
+    return true
+  })
+  console.log(`[Cron] 硬过滤后: ${afterHardFilter.length} 条 (排除 ${consumerFiltered} 条低质量)`)
+
   const sources = await loadActiveSources()
   const sourceMap = new Map<string, string>()
   for (const s of sources) sourceMap.set(s.name, s.id)
 
-  console.log(`[Cron] AI处理开始, 每批 ${BATCH_SIZE} 条`)
+  console.log(`[Cron] AI五维评分开始, 每批 ${BATCH_SIZE} 条`)
   const allResults: {
     raw: RawItem
     category: string
@@ -45,11 +81,11 @@ async function processCrawledItems(rawItems: RawItem[]) {
     tags: string[]
   }[] = []
 
-  for (let i = 0; i < unique.length; i += BATCH_SIZE) {
-    const batch = unique.slice(i, i + BATCH_SIZE)
+  for (let i = 0; i < afterHardFilter.length; i += BATCH_SIZE) {
+    const batch = afterHardFilter.slice(i, i + BATCH_SIZE)
     try {
       const batchResults = await batchClassify(
-        batch.map((item) => ({ title: item.title, content: item.content }))
+        batch.map((item) => ({ title: item.title, content: item.content, source: item.source, publishedAt: item.publishedAt }))
       )
       for (let j = 0; j < batch.length; j++) {
         const result = batchResults[j]
@@ -57,23 +93,23 @@ async function processCrawledItems(rawItems: RawItem[]) {
           allResults.push({ raw: batch[j], ...result })
         }
       }
-      if (i + BATCH_SIZE < unique.length) await new Promise((r) => setTimeout(r, 800))
+      if (i + BATCH_SIZE < afterHardFilter.length) await new Promise((r) => setTimeout(r, 800))
     } catch (error) {
       console.error(`[Cron] 批次失败:`, (error as Error).message)
       for (const item of batch) {
         allResults.push({
           raw: item,
-          category: 'industry-news',
+          category: 'market',
           summary: item.title.slice(0, 30),
           score: 5,
-          tags: [],
+          tags: ['全屋定制', '中性'],
         })
       }
     }
   }
 
-  // 深度推荐理由
-  const highScoreItems = allResults.filter((r) => r.score >= 7)
+  // 战略解读（评分>=6分）
+  const highScoreItems = allResults.filter((r) => r.score >= 6)
   const reasonsMap = new Map<number, string>()
   if (highScoreItems.length > 0) {
     for (let i = 0; i < highScoreItems.length; i += BATCH_SIZE) {
@@ -84,11 +120,11 @@ async function processCrawledItems(rawItems: RawItem[]) {
         )
         for (let j = 0; j < batch.length; j++) {
           const idx = allResults.indexOf(batch[j])
-          reasonsMap.set(idx, reasons[j] || '行业相关资讯，值得关注')
+          reasonsMap.set(idx, reasons[j] || '行业战略资讯，建议关注')
         }
         if (i + BATCH_SIZE < highScoreItems.length) await new Promise((r) => setTimeout(r, 600))
       } catch (error) {
-        console.error(`[Cron] 推荐理由失败:`, (error as Error).message)
+        console.error(`[Cron] 战略解读失败:`, (error as Error).message)
       }
     }
   }
@@ -97,7 +133,7 @@ async function processCrawledItems(rawItems: RawItem[]) {
   const sourceStats: Record<string, { fetched: number; added: number; failed: number }> = {}
   for (let i = 0; i < allResults.length; i++) {
     const { raw, category, summary, score, tags } = allResults[i]
-    const reason = reasonsMap.get(i) || (score >= 7 ? '行业相关资讯，值得关注' : '行业相关资讯')
+    const reason = reasonsMap.get(i) || (score >= 6 ? '行业战略资讯，建议关注' : '行业相关资讯')
 
     if (!sourceStats[raw.source]) sourceStats[raw.source] = { fetched: 0, added: 0, failed: 0 }
     sourceStats[raw.source].fetched++
@@ -122,7 +158,7 @@ async function processCrawledItems(rawItems: RawItem[]) {
           summary,
           reason,
           score,
-          isSelected: score >= 7,
+          isSelected: score >= 6,
           tags,
         },
       })
@@ -134,7 +170,7 @@ async function processCrawledItems(rawItems: RawItem[]) {
     }
   }
 
-  return { added, skipped, failed, sourceStats }
+  return { added, skipped, failed, consumerFiltered, sourceStats }
 }
 
 async function generateDaily() {
@@ -145,7 +181,7 @@ async function generateDaily() {
   const items = await prisma.item.findMany({
     where: { isSelected: true, publishedAt: { gte: yesterday } },
     orderBy: { score: 'desc' },
-    take: 7,
+    take: 10,
   })
 
   if (items.length === 0) {
@@ -154,7 +190,7 @@ async function generateDaily() {
   }
 
   const dailyResult = await generateDailyWithSections(
-    items.map((item) => ({ title: item.title, summary: item.summary || item.title, category: item.category }))
+    items.map((item) => ({ title: item.title, summary: item.summary || item.title, category: item.category, tags: item.tags }))
   )
 
   const categoryGroups: Record<string, typeof items> = {}
@@ -213,7 +249,7 @@ export async function GET(request: NextRequest) {
   })
 
   let rawItems: RawItem[] = []
-  let result = { added: 0, skipped: 0, failed: 0, sourceStats: {} as Record<string, { fetched: number; added: number; failed: number }> }
+  let result = { added: 0, skipped: 0, failed: 0, consumerFiltered: 0, sourceStats: {} as Record<string, { fetched: number; added: number; failed: number }> }
   let dailyGenerated = false
   let errorMessage: string | null = null
 

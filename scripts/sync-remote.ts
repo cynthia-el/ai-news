@@ -34,7 +34,7 @@ async function processCrawledItems(rawItems: RawItem[]) {
     console.log(`  处理批次 ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(unique.length / BATCH_SIZE)} (${batch.length} 条)`)
 
     try {
-      const batchResults = await batchClassify(batch.map((item) => ({ title: item.title, content: item.content })))
+      const batchResults = await batchClassify(batch.map((item) => ({ title: item.title, content: item.content, source: item.source, publishedAt: item.publishedAt })))
       for (let j = 0; j < batch.length; j++) {
         const result = batchResults[j]
         if (result) allResults.push({ raw: batch[j], ...result })
@@ -43,7 +43,7 @@ async function processCrawledItems(rawItems: RawItem[]) {
     } catch (error) {
       console.error(`  ✗ 批次处理失败:`, (error as Error).message)
       for (const item of batch) {
-        allResults.push({ raw: item, category: 'industry-news', summary: item.title.slice(0, 30), score: 5, tags: [] })
+        allResults.push({ raw: item, category: 'market', summary: item.title.slice(0, 30), score: 5, tags: ['全屋定制', '中性'] })
       }
     }
   }
@@ -51,8 +51,8 @@ async function processCrawledItems(rawItems: RawItem[]) {
   console.log(`\n[AI处理] 完成，allResults=${allResults.length} 条`)
 
   // 深度推荐理由
-  const highScoreItems = allResults.filter((r) => r.score >= 7)
-  console.log(`\n[推荐理由] ${highScoreItems.length} 条高分条目`)
+  const highScoreItems = allResults.filter((r) => r.score >= 6)
+  console.log(`\n[战略解读] ${highScoreItems.length} 条评分≥6分条目`)
   const reasonsMap = new Map<number, string>()
   if (highScoreItems.length > 0) {
     for (let i = 0; i < highScoreItems.length; i += BATCH_SIZE) {
@@ -61,11 +61,11 @@ async function processCrawledItems(rawItems: RawItem[]) {
         const reasons = await generateDeepReasons(batch.map((r) => ({ title: r.raw.title, summary: r.summary, category: r.category })))
         for (let j = 0; j < batch.length; j++) {
           const idx = allResults.indexOf(batch[j])
-          reasonsMap.set(idx, reasons[j] || '行业相关资讯，值得关注')
+          reasonsMap.set(idx, reasons[j] || '行业战略资讯，建议关注')
         }
         if (i + BATCH_SIZE < highScoreItems.length) await new Promise((resolve) => setTimeout(resolve, 600))
       } catch (error) {
-        console.error(`  ✗ 推荐理由生成失败:`, (error as Error).message)
+        console.error(`  ✗ 战略解读生成失败:`, (error as Error).message)
       }
     }
   }
@@ -76,7 +76,7 @@ async function processCrawledItems(rawItems: RawItem[]) {
 
   for (let i = 0; i < allResults.length; i++) {
     const { raw, category, summary, score, tags } = allResults[i]
-    const reason = reasonsMap.get(i) || (score >= 7 ? '行业相关资讯，值得关注' : '行业相关资讯')
+    const reason = reasonsMap.get(i) || (score >= 6 ? '行业战略资讯，建议关注' : '行业相关资讯')
 
     if (!sourceStats[raw.source]) sourceStats[raw.source] = { fetched: 0, added: 0, failed: 0 }
     sourceStats[raw.source].fetched++
@@ -98,7 +98,7 @@ async function processCrawledItems(rawItems: RawItem[]) {
           summary,
           reason,
           score,
-          isSelected: score >= 7,
+          isSelected: score >= 6,
           tags,
         },
       })
@@ -135,7 +135,7 @@ async function generateDaily() {
   }
 
   console.log(`  找到 ${items.length} 条精选内容`)
-  const dailyResult = await generateDailyWithSections(items.map((item) => ({ title: item.title, summary: item.summary || item.title, category: item.category })))
+  const dailyResult = await generateDailyWithSections(items.map((item) => ({ title: item.title, summary: item.summary || item.title, category: item.category, tags: item.tags })))
 
   const categoryGroups: Record<string, typeof items> = {}
   for (const item of items) {
