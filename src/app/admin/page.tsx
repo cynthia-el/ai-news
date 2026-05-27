@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { CATEGORY_MAP, CATEGORY_META } from '@/lib/constants/categories'
+import SyncButton from './components/SyncButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,9 +54,12 @@ export default async function AdminPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">数据看板</h1>
-        <p className="text-sm text-slate-500 mt-1">实时了解系统运行状态</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">数据看板</h1>
+          <p className="text-sm text-slate-500 mt-1">实时了解系统运行状态</p>
+        </div>
+        <SyncButton />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
