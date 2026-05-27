@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 const navItems = [
   { href: '/', label: '首页', icon: HomeIcon },
   { href: '/daily', label: '日报', icon: DailyIcon },
-  { href: '/admin', label: '管理后台', icon: AdminIcon },
+  ...(process.env.NEXT_PUBLIC_HIDE_ADMIN === '1' ? [] : [{ href: '/admin', label: '管理后台', icon: AdminIcon } as const]),
 ]
 
 export function Sidebar() {

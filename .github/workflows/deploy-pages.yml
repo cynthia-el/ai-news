@@ -1,0 +1,63 @@
+name: Deploy Static Site to Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */2 * * *'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      EXPORT_STATIC: '1'
+      NEXT_PUBLIC_HIDE_ADMIN: '1'
+      NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL || 'https://localhost' }}
+      NEXT_PUBLIC_SITE_NAME: ${{ vars.NEXT_PUBLIC_SITE_NAME || '家居建材AI资讯' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Remove non-static routes
+        run: |
+          echo "Removing admin, api, agent, and feed routes for static export"
+          rm -rf src/app/admin
+          rm -rf src/app/api
+          rm -rf src/app/agent
+          rm -rf src/app/feed.xml
+          rm -rf src/app/feed
+          echo "Done."
+
+      - name: Build static export
+        run: npx next build
+        timeout-minutes: 15
+        env:
+          NODE_ENV: production
+
+      - name: Check build output
+        run: |
+          echo "=== Build output ==="
+          ls -la dist/ 2>/dev/null || true
+          echo "=== Total dist size ==="
+          du -sh dist/ || true
+
+      - name: Deploy to Cloudflare Pages
+        run: npx wrangler pages deploy dist --project-name ai-news-static --branch main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
