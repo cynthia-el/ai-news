@@ -1,0 +1,7 @@
+name = "ai-news-proxy"
+main = "proxy-worker.js"
+compatibility_date = "2025-05-22"
+
+# 在 Cloudflare Dashboard 设置 TARGET_HOST：
+# Workers → ai-news-proxy → Settings → Variables
+# 添加 TARGET_HOST = your-app.vercel.app

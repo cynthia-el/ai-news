@@ -1,0 +1,31 @@
+name: Deploy Cloudflare Proxy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cloudflare-proxy/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install wrangler
+        run: npm install -g wrangler
+
+      - name: Deploy proxy worker
+        run: |
+          cd cloudflare-proxy
+          npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
