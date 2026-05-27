@@ -1,3 +1,9 @@
+# NOTE: This config is for Cloudflare Workers PAID tier only ($5/month).
+# The free tier has a 1MB script size limit which cannot fit the full app.
+# To use this config, update deploy.yml:
+#   run: npx wrangler deploy --config wrangler.cron.toml
+# And remove the "Remove sync-only code" step from deploy.yml.
+
 name = "ai-news-aggregator"
 main = ".open-next/worker-cron.js"
 compatibility_date = "2025-05-22"

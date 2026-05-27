@@ -14,6 +14,13 @@ export default function SyncButton() {
 
     try {
       const res = await fetch('/api/admin/sync', { method: 'POST' })
+
+      if (res.status === 404) {
+        setStatus('error')
+        setMessage('当前环境不支持同步，请前往 Vercel 执行')
+        return
+      }
+
       const data = await res.json()
 
       if (res.ok && data.success) {

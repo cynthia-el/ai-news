@@ -31,53 +31,31 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
 
+      - name: Remove sync-only code for Cloudflare free tier bundle size
+        run: |
+          echo "Removing sync routes to reduce bundle size (cheerio + iconv-lite + anthropic SDK)"
+          rm -rf src/app/api/cron/sync/
+          rm -rf src/app/api/admin/sync/
+          echo "Done. Vercel is unaffected - this only runs in CI."
+
       - name: Build for Cloudflare
         run: npx opennextjs-cloudflare build
         timeout-minutes: 15
         env:
           NODE_ENV: production
 
-      - name: Add cron support to worker
-        run: |
-          cat > .open-next/worker-cron.js << 'EOF'
-          import worker from './worker.js';
-
-          export default {
-            async fetch(request, env, ctx) {
-              return worker.fetch(request, env, ctx);
-            },
-            async scheduled(event, env, ctx) {
-              const request = new Request('http://internal/api/admin/sync', {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${env.CRON_SECRET || ''}`,
-                },
-              });
-              try {
-                const response = await worker.fetch(request, env, ctx);
-                console.log(`[Cron] Sync status: ${response.status}`);
-                const body = await response.text();
-                console.log(`[Cron] Response: ${body.slice(0, 500)}`);
-              } catch (error) {
-                console.error(`[Cron] Sync failed:`, error);
-              }
-            },
-          };
-          EOF
-
       - name: Check bundle size
         run: |
           echo "=== Build output ==="
           ls -lh .open-next/server-functions/default/handler.mjs 2>/dev/null || true
-          ls -lh .open-next/assets/ 2>/dev/null || true
           echo "=== Total .open-next size ==="
           du -sh .open-next/ || true
 
       - name: Deploy secrets to Cloudflare
         run: |
-          printf "%s" "$DATABASE_URL" | npx wrangler secret put DATABASE_URL --yes
-          printf "%s" "$CRON_SECRET" | npx wrangler secret put CRON_SECRET --yes
-          printf "%s" "$LONGCAT_API_KEY" | npx wrangler secret put LONGCAT_API_KEY --yes
+          printf "%s" "$DATABASE_URL" | npx wrangler secret put DATABASE_URL
+          printf "%s" "$CRON_SECRET" | npx wrangler secret put CRON_SECRET
+          printf "%s" "$LONGCAT_API_KEY" | npx wrangler secret put LONGCAT_API_KEY
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
@@ -85,7 +63,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
 
       - name: Deploy to Cloudflare Workers
-        run: npx wrangler deploy --config wrangler.cron.toml
+        run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
 
