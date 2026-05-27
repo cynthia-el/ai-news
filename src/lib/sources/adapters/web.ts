@@ -37,8 +37,9 @@ async function fetchHtmlWithEncoding(url: string, timeout = 15000): Promise<stri
     const charsetMatch = contentType.match(/charset=([\w-]+)/i)
     let encoding = charsetMatch ? charsetMatch[1].toLowerCase() : 'utf-8'
 
-    // 如果header没有指定或指定为utf-8，检查HTML meta标签
-    if (encoding === 'utf-8') {
+    // 仅当header未指定charset时，才检查HTML meta标签
+    // （避免meta中的旧编码声明覆盖正确的Content-Type头）
+    if (!charsetMatch) {
       const metaCheck = buffer.toString('ascii', 0, Math.min(4096, buffer.length))
       const metaMatch = metaCheck.match(/<meta[^>]+charset=["']?([\w-]+)/i)
       if (metaMatch) {
