@@ -103,8 +103,8 @@ export default function CrawlLogsPage() {
               logs.map((log) => (
                 <tr key={log.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition">
                   <td className="px-5 py-4">
-                    <div className="text-slate-900 text-sm">{new Date(log.startedAt).toLocaleDateString('zh-CN')}</div>
-                    <div className="text-xs text-slate-400">{new Date(log.startedAt).toLocaleTimeString('zh-CN')}</div>
+                    <div className="text-slate-900 text-sm">{new Date(log.startedAt).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' })}</div>
+                    <div className="text-xs text-slate-400">{new Date(log.startedAt).toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' })}</div>
                   </td>
                   <td className="px-5 py-4">
                     <StatusBadge status={log.status} />
