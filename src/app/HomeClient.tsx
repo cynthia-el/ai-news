@@ -95,12 +95,12 @@ export default function HomeClient({ initialItems }: HomeClientProps) {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-8 py-8">
+    <div className="max-w-5xl mx-auto px-4 md:px-8 py-6 md:py-8">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-5">
+      <div className="mb-6 md:mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4 md:mb-5">
           <div className="flex items-center gap-3">
-            <h1 className="text-lg font-semibold text-slate-900 tracking-tight">
+            <h1 className="text-base md:text-lg font-semibold text-slate-900 tracking-tight">
               {mode === 'selected' ? '精选资讯' : '全部资讯'}
             </h1>
             <span className="px-2 py-0.5 text-[11px] font-medium rounded bg-slate-100 text-slate-500">
@@ -115,8 +115,8 @@ export default function HomeClient({ initialItems }: HomeClientProps) {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg border border-slate-200 p-3.5 mb-6">
-        <div className="flex flex-wrap items-center gap-2.5">
+      <div className="bg-white rounded-lg border border-slate-200 p-3 md:p-3.5 mb-4 md:mb-6">
+        <div className="flex flex-wrap items-center gap-2 md:gap-2.5">
           <div className="flex items-center bg-slate-100 rounded-lg p-0.5">
             {[
               { key: 'selected', label: '精选' },
@@ -136,16 +136,16 @@ export default function HomeClient({ initialItems }: HomeClientProps) {
             ))}
           </div>
 
-          <div className="h-5 w-px bg-slate-200" />
+          <div className="h-5 w-px bg-slate-200 hidden sm:block" />
 
           <TimeFilter value={days} onChange={handleDaysChange} />
 
-          <div className="h-5 w-px bg-slate-200" />
+          <div className="h-5 w-px bg-slate-200 hidden sm:block" />
 
           <div className="flex items-center gap-1.5 flex-wrap">
             <button
               onClick={() => handleCategoryChange('')}
-              className={`px-3 py-1.5 text-[13px] font-medium rounded-md border transition ${
+              className={`px-2.5 md:px-3 py-1.5 text-[13px] font-medium rounded-md border transition ${
                 category === ''
                   ? 'bg-slate-900 text-white border-slate-900'
                   : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
@@ -157,7 +157,7 @@ export default function HomeClient({ initialItems }: HomeClientProps) {
               <button
                 key={key}
                 onClick={() => handleCategoryChange(key)}
-                className={`px-3 py-1.5 text-[13px] font-medium rounded-md border transition ${
+                className={`px-2.5 md:px-3 py-1.5 text-[13px] font-medium rounded-md border transition ${
                   category === key
                     ? 'bg-slate-900 text-white border-slate-900'
                     : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'

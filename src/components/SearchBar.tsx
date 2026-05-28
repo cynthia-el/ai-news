@@ -12,7 +12,7 @@ export function SearchBar({ value, onChange, onSubmit, placeholder = '搜索关�
         e.preventDefault()
         onSubmit()
       }}
-      className="relative w-full max-w-md"
+      className="relative w-full max-w-full md:max-w-md"
     >
       <svg
         className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"

@@ -19,10 +19,10 @@ export default function RootLayout({
     >
       <body className="min-h-full flex bg-white">
         <Sidebar />
-        <div className="flex-1 flex flex-col ml-52">
+        <div className="flex-1 flex flex-col md:ml-52 pt-14 md:pt-0 pb-14 md:pb-0">
           <main className="flex-1">{children}</main>
           <footer className="border-t border-slate-100">
-            <div className="max-w-5xl mx-auto px-6 py-5 flex items-center justify-between">
+            <div className="max-w-5xl mx-auto px-4 md:px-6 py-5 flex items-center justify-between">
               <div className="text-[11px] text-slate-400">
                 家居建材资讯 · 智能行业信息聚合平台
               </div>

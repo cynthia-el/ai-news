@@ -83,6 +83,7 @@ interface DailyClientProps {
 
 export default function DailyClient({ dailies, dates, defaultDate }: DailyClientProps) {
   const [selectedDate, setSelectedDate] = useState(defaultDate)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const daily = useMemo(() => {
     return dailies.find((d) => d.date === selectedDate) || null
@@ -90,14 +91,13 @@ export default function DailyClient({ dailies, dates, defaultDate }: DailyClient
 
   const groupedDates = useMemo(() => groupDatesByMonth(dates), [dates])
   const dateInfo = selectedDate ? formatDateFull(selectedDate) : null
-  const todayStr = new Date().toISOString().split('T')[0]
   const sectionNumbers = ['01', '02', '03', '04', '05', '06', '07']
 
   return (
     <div className="min-h-screen bg-[#faf9f7]">
-      <div className="flex">
-        {/* 左侧：往期日报列表 */}
-        <aside className="w-52 lg:w-60 flex-shrink-0 border-r border-stone-200 bg-white sticky top-0 h-screen overflow-hidden flex flex-col">
+      <div className="flex flex-col md:flex-row">
+        {/* ===== 桌面端：左侧日报列表 ===== */}
+        <aside className="hidden md:flex w-52 lg:w-60 flex-shrink-0 border-r border-stone-200 bg-white sticky top-0 h-screen overflow-hidden flex-col">
           <div className="p-4 border-b border-stone-100">
             <button
               onClick={() => setSelectedDate(defaultDate)}
@@ -151,20 +151,54 @@ export default function DailyClient({ dailies, dates, defaultDate }: DailyClient
           </div>
         </aside>
 
-        {/* 右侧：主内容区 */}
+        {/* ===== 移动端：顶部日期选择器 ===== */}
+        <div className="md:hidden bg-white border-b border-stone-200">
+          <div className="flex items-center gap-2 px-4 py-3 overflow-x-auto no-scrollbar">
+            <button
+              onClick={() => setSelectedDate(defaultDate)}
+              className={`flex-shrink-0 py-2 px-3 rounded-lg text-sm font-medium transition ${
+                selectedDate === defaultDate
+                  ? 'bg-stone-900 text-white'
+                  : 'bg-stone-100 text-stone-700'
+              }`}
+            >
+              最新
+            </button>
+            {dates.slice(0, 30).map((d) => {
+              const isActive = selectedDate === d.date
+              const info = formatDateFull(d.date)
+              return (
+                <button
+                  key={d.date}
+                  onClick={() => setSelectedDate(d.date)}
+                  className={`flex-shrink-0 py-2 px-3 rounded-lg text-sm font-medium transition min-w-[3.5rem] text-center ${
+                    isActive
+                      ? 'bg-stone-900 text-white'
+                      : 'bg-stone-100 text-stone-600'
+                  }`}
+                >
+                  <div className="text-sm">{info.short}</div>
+                  <div className="text-[10px] opacity-70">周{info.week}</div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* ===== 主内容区 ===== */}
         <main className="flex-1 min-w-0">
-          <div className="max-w-3xl mx-auto px-8 py-10">
+          <div className="max-w-3xl mx-auto px-4 md:px-8 py-6 md:py-10">
             {daily ? (
               <div>
                 {/* 报头 */}
-                <header className="mb-10 pb-8 border-b-2 border-stone-900">
-                  <div className="flex items-end justify-between">
+                <header className="mb-8 md:mb-10 pb-6 md:pb-8 border-b-2 border-stone-900">
+                  <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
                     <div>
-                      <h1 className="text-5xl md:text-6xl font-black text-stone-900 tracking-tight leading-none mb-3">
+                      <h1 className="text-3xl md:text-5xl lg:text-6xl font-black text-stone-900 tracking-tight leading-none mb-3">
                         家居战略资讯日报
                       </h1>
                       {dateInfo && (
-                        <p className="text-base text-stone-500 font-medium">
+                        <p className="text-sm md:text-base text-stone-500 font-medium">
                           {dateInfo.label} · 星期{dateInfo.week}
                         </p>
                       )}
@@ -177,8 +211,8 @@ export default function DailyClient({ dailies, dates, defaultDate }: DailyClient
 
                   {/* 主编导语 */}
                   {(daily.summary || daily.editorNote) && (
-                    <div className="mt-6 pt-6 border-t border-stone-200">
-                      <p className="text-stone-600 leading-relaxed text-[15px]">
+                    <div className="mt-4 md:mt-6 pt-4 md:pt-6 border-t border-stone-200">
+                      <p className="text-stone-600 leading-relaxed text-sm md:text-[15px]">
                         {daily.summary}
                       </p>
                       {daily.editorNote && (
@@ -192,15 +226,15 @@ export default function DailyClient({ dailies, dates, defaultDate }: DailyClient
 
                 {/* 内容区 */}
                 {daily.sections && daily.sections.length > 0 ? (
-                  <div className="space-y-12">
+                  <div className="space-y-8 md:space-y-12">
                     {daily.sections.map((section, idx) => (
                       <section key={section.id}>
-                        <div className="flex items-baseline gap-4 mb-5 pb-3 border-b border-stone-200">
-                          <span className="text-3xl font-black text-stone-300 tabular-nums">
+                        <div className="flex items-baseline gap-3 md:gap-4 mb-4 md:mb-5 pb-3 border-b border-stone-200">
+                          <span className="text-2xl md:text-3xl font-black text-stone-300 tabular-nums">
                             {sectionNumbers[idx] || String(idx + 1).padStart(2, '0')}
                           </span>
                           <div>
-                            <h2 className="text-xl font-bold text-stone-900">{section.title}</h2>
+                            <h2 className="text-lg md:text-xl font-bold text-stone-900">{section.title}</h2>
                             {section.description && (
                               <p className="text-sm text-stone-500 mt-0.5">{section.description}</p>
                             )}
@@ -228,7 +262,7 @@ export default function DailyClient({ dailies, dates, defaultDate }: DailyClient
                 )}
 
                 {/* 报尾 */}
-                <footer className="mt-16 pt-8 border-t border-stone-200 text-center">
+                <footer className="mt-12 md:mt-16 pt-6 md:pt-8 border-t border-stone-200 text-center">
                   <p className="text-xs text-stone-400 uppercase tracking-widest">
                     家居战略资讯日报 · 每日精选行业要闻
                   </p>
@@ -263,18 +297,18 @@ function DailyItemCard({ item }: { item: DailyItem }) {
           href={item.url.trim()}
           target="_blank"
           rel="noopener noreferrer"
-          className="block text-[17px] font-semibold text-stone-900 hover:text-stone-600 hover:underline mb-2 leading-snug"
+          className="block text-base md:text-[17px] font-semibold text-stone-900 hover:text-stone-600 hover:underline mb-2 leading-snug"
         >
           {item.title}
         </a>
       ) : (
-        <h3 className="text-[17px] font-semibold text-stone-900 mb-2 leading-snug">
+        <h3 className="text-base md:text-[17px] font-semibold text-stone-900 mb-2 leading-snug">
           {item.title}
         </h3>
       )}
 
       {item.summary && (
-        <p className="text-[14px] text-stone-500 leading-relaxed mb-2">
+        <p className="text-[13px] md:text-[14px] text-stone-500 leading-relaxed mb-2">
           {item.summary}
         </p>
       )}

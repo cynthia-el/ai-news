@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 
 const navItems = [
@@ -10,11 +11,57 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-52 bg-slate-50 border-r border-slate-200 flex flex-col z-50">
-      {/* Logo */}
-      <div className="h-14 flex items-center px-5 border-b border-slate-200">
+    <>
+      {/* ===== 桌面端：左侧边栏 ===== */}
+      <aside className="hidden md:flex fixed left-0 top-0 h-full w-52 bg-slate-50 border-r border-slate-200 flex-col z-50">
+        {/* Logo */}
+        <div className="h-14 flex items-center px-5 border-b border-slate-200">
+          <a href="/" className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-md bg-slate-900 flex items-center justify-center">
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+              </svg>
+            </div>
+            <span className="text-sm font-semibold text-slate-900 tracking-tight">
+              家居建材资讯
+            </span>
+          </a>
+        </div>
+
+        {/* Nav */}
+        <nav className="flex-1 px-2.5 py-4 space-y-0.5">
+          {navItems.map((item) => {
+            const isActive = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href))
+            return (
+              <a
+                key={item.href}
+                href={item.href}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition ${
+                  isActive
+                    ? 'bg-slate-900 text-white'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <item.icon className={`w-4 h-4 ${isActive ? 'text-slate-300' : 'text-slate-400'}`} />
+                {item.label}
+              </a>
+            )
+          })}
+        </nav>
+
+        {/* Footer */}
+        <div className="px-5 py-3 border-t border-slate-200">
+          <p className="text-[11px] text-slate-400">
+            智能采集 · 深度解读
+          </p>
+        </div>
+      </aside>
+
+      {/* ===== 移动端：顶部标题栏 + 底部导航 ===== */}
+      <header className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-slate-200 z-50 flex items-center justify-between px-4">
         <a href="/" className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-md bg-slate-900 flex items-center justify-center">
             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -25,36 +72,66 @@ export function Sidebar() {
             家居建材资讯
           </span>
         </a>
-      </div>
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="p-2 rounded-lg hover:bg-slate-100 transition"
+          aria-label="菜单"
+        >
+          <svg className="w-5 h-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            {mobileMenuOpen ? (
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+            )}
+          </svg>
+        </button>
+      </header>
 
-      {/* Nav */}
-      <nav className="flex-1 px-2.5 py-4 space-y-0.5">
-        {navItems.map((item) => {
+      {/* 移动端菜单下拉 */}
+      {mobileMenuOpen && (
+        <div className="md:hidden fixed top-14 left-0 right-0 bg-white border-b border-slate-200 z-40 shadow-lg">
+          <nav className="p-2 space-y-0.5">
+            {navItems.map((item) => {
+              const isActive = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href))
+              return (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-md text-sm font-medium transition ${
+                    isActive
+                      ? 'bg-slate-900 text-white'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <item.icon className={`w-4 h-4 ${isActive ? 'text-slate-300' : 'text-slate-400'}`} />
+                  {item.label}
+                </a>
+              )
+            })}
+          </nav>
+        </div>
+      )}
+
+      {/* 移动端底部 Tab 导航 */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-14 bg-white border-t border-slate-200 z-50 flex items-center justify-around">
+        {navItems.slice(0, 2).map((item) => {
           const isActive = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href))
           return (
             <a
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition ${
-                isActive
-                  ? 'bg-slate-900 text-white'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition ${
+                isActive ? 'text-slate-900' : 'text-slate-400'
               }`}
             >
-              <item.icon className={`w-4 h-4 ${isActive ? 'text-slate-300' : 'text-slate-400'}`} />
-              {item.label}
+              <item.icon className="w-5 h-5" />
+              <span className="text-[10px] font-medium">{item.label}</span>
             </a>
           )
         })}
       </nav>
-
-      {/* Footer */}
-      <div className="px-5 py-3 border-t border-slate-200">
-        <p className="text-[11px] text-slate-400">
-          智能采集 · 深度解读
-        </p>
-      </div>
-    </aside>
+    </>
   )
 }
 
@@ -77,7 +154,7 @@ function DailyIcon({ className }: { className?: string }) {
 function AdminIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.107-1.204l-.527-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165.71.505.781.929l.149.894c.09.542.56.94 1.11.94h1.094c.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165.397-.505.71-.93.78l-.894.15c-.542.09-.94.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.107-1.204l-.527-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894z" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
   )
