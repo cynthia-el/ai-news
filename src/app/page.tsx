@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import HomeClient from './HomeClient'
 
-export const dynamic = 'force-static'
+export const revalidate = 60
 
 export default async function Home() {
   const items = await prisma.item.findMany({
