@@ -1,6 +1,6 @@
 const API_KEY = process.env.LONGCAT_API_KEY || process.env.ANTHROPIC_API_KEY || ''
 const BASE_URL = process.env.AI_BASE_URL || 'https://api.longcat.chat/anthropic'
-const MODEL = process.env.AI_MODEL || 'LongCat-Flash-Lite'
+const MODEL = process.env.AI_MODEL || 'LongCat-2.0-Preview'
 
 export interface AIProcessResult {
   category: string
