@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import DailyClient from './DailyClient'
 
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
 
 export default async function DailyPage() {
   const today = new Date().toISOString().split('T')[0]
