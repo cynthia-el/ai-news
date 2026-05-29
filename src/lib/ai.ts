@@ -73,6 +73,12 @@ const SENTIMENT_TAGS = ['正面', '中性', '风险']
 // ============================================================
 
 async function callLongCat(systemPrompt: string, userPrompt: string, maxTokens = 4000): Promise<string> {
+  const messages: { role: string; content: string }[] = []
+  if (systemPrompt) {
+    messages.push({ role: 'system', content: systemPrompt })
+  }
+  messages.push({ role: 'user', content: userPrompt })
+
   const response = await fetch(`${BASE_URL}/v1/messages`, {
     method: 'POST',
     headers: {
@@ -83,14 +89,15 @@ async function callLongCat(systemPrompt: string, userPrompt: string, maxTokens =
     body: JSON.stringify({
       model: MODEL,
       max_tokens: maxTokens,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
+      messages,
     }),
   })
 
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(`LongCat API ${response.status}: ${errorText}`)
+    console.error(`[AI API Error] Status: ${response.status}, Content-Type: ${response.headers.get('content-type')}`)
+    console.error(`[AI API Error] Body: ${errorText.slice(0, 500)}`)
+    throw new Error(`LongCat API ${response.status}: ${errorText.slice(0, 200)}`)
   }
 
   const data = await response.json()
