@@ -222,12 +222,8 @@ async function generateDaily() {
   return true
 }
 
-export async function runSync() {
+async function doSync(logId: string) {
   console.log(`[Cron] 同步任务开始: ${new Date().toLocaleString('zh-CN')}`)
-
-  const crawlLog = await prisma.crawlLog.create({
-    data: { status: 'running', startedAt: new Date() },
-  })
 
   let rawItems: RawItem[] = []
   let result = { added: 0, skipped: 0, failed: 0, consumerFiltered: 0, sourceStats: {} as Record<string, { fetched: number; added: number; failed: number }> }
@@ -241,17 +237,17 @@ export async function runSync() {
 
     if (rawItems.length === 0) {
       await prisma.crawlLog.update({
-        where: { id: crawlLog.id },
+        where: { id: logId },
         data: { status: 'success', endedAt: new Date(), totalFetched: 0, sources: sourceNames },
       })
-      return { success: true, message: '未获取到任何资讯', added: 0, skipped: 0, failed: 0, dailyGenerated: false }
+      return
     }
 
     result = await processCrawledItems(rawItems)
     dailyGenerated = await generateDaily()
 
     await prisma.crawlLog.update({
-      where: { id: crawlLog.id },
+      where: { id: logId },
       data: {
         status: 'success',
         endedAt: new Date(),
@@ -265,20 +261,42 @@ export async function runSync() {
       },
     })
 
-    return {
-      success: true,
-      fetched: rawItems.length,
-      added: result.added,
-      skipped: result.skipped,
-      failed: result.failed,
-      dailyGenerated,
-    }
+    console.log(`[Cron] 同步任务完成: fetched=${rawItems.length}, added=${result.added}`)
   } catch (error) {
     errorMessage = (error as Error).message
+    console.error(`[Cron] 同步任务失败: ${errorMessage}`)
     await prisma.crawlLog.update({
-      where: { id: crawlLog.id },
+      where: { id: logId },
       data: { status: 'failed', endedAt: new Date(), errorMessage, totalFetched: rawItems.length },
     })
-    throw new Error(errorMessage)
   }
+}
+
+export async function runSync() {
+  const crawlLog = await prisma.crawlLog.create({
+    data: { status: 'running', startedAt: new Date() },
+  })
+  await doSync(crawlLog.id)
+
+  const finalLog = await prisma.crawlLog.findUnique({ where: { id: crawlLog.id } })
+  if (!finalLog) {
+    return { success: true, message: '同步完成', fetched: 0, added: 0, skipped: 0, failed: 0, dailyGenerated: false }
+  }
+
+  return {
+    success: finalLog.status === 'success',
+    message: finalLog.errorMessage || '同步完成',
+    fetched: finalLog.totalFetched,
+    added: finalLog.added,
+    skipped: finalLog.skipped,
+    failed: finalLog.failed,
+    dailyGenerated: finalLog.dailyGenerated,
+  }
+}
+
+export async function startBackgroundSync(logId: string) {
+  // Intentionally not awaited — runs in background
+  doSync(logId).catch((err) => {
+    console.error('[Cron] Background sync uncaught error:', err)
+  })
 }
