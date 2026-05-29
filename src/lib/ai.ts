@@ -79,30 +79,44 @@ async function callLongCat(systemPrompt: string, userPrompt: string, maxTokens =
   }
   messages.push({ role: 'user', content: userPrompt })
 
-  const response = await fetch(`${BASE_URL}/v1/messages`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${API_KEY}`,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: maxTokens,
-      messages,
-    }),
-  })
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 60000)
 
-  if (!response.ok) {
-    const errorText = await response.text()
-    console.error(`[AI API Error] Status: ${response.status}, Content-Type: ${response.headers.get('content-type')}`)
-    console.error(`[AI API Error] Body: ${errorText.slice(0, 500)}`)
-    throw new Error(`LongCat API ${response.status}: ${errorText.slice(0, 200)}`)
+  try {
+    const response = await fetch(`${BASE_URL}/v1/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: maxTokens,
+        messages,
+      }),
+      signal: controller.signal,
+    })
+
+    clearTimeout(timeoutId)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`[AI API Error] Status: ${response.status}, Content-Type: ${response.headers.get('content-type')}`)
+      console.error(`[AI API Error] Body: ${errorText.slice(0, 500)}`)
+      throw new Error(`LongCat API ${response.status}: ${errorText.slice(0, 200)}`)
+    }
+
+    const data = await response.json()
+    const text = data.content?.[0]?.text || ''
+    return text
+  } catch (error) {
+    clearTimeout(timeoutId)
+    if ((error as Error).name === 'AbortError') {
+      throw new Error('LongCat API 请求超时（60秒）')
+    }
+    throw error
   }
-
-  const data = await response.json()
-  const text = data.content?.[0]?.text || ''
-  return text
 }
 
 // ============================================================
