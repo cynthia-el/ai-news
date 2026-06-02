@@ -1,6 +1,6 @@
 const API_KEY = process.env.LONGCAT_API_KEY || process.env.ANTHROPIC_API_KEY || ''
 const BASE_URL = process.env.AI_BASE_URL || 'https://api.longcat.chat/anthropic'
-const MODEL = process.env.AI_MODEL || 'LongCat-2.0-Preview'
+const MODEL = process.env.AI_MODEL || 'LongCat-Flash-Lite'
 
 export interface AIProcessResult {
   category: string
@@ -80,7 +80,7 @@ async function callLongCat(systemPrompt: string, userPrompt: string, maxTokens =
   messages.push({ role: 'user', content: userPrompt })
 
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 60000)
+  const timeoutId = setTimeout(() => controller.abort(), 120000)
 
   try {
     const response = await fetch(`${BASE_URL}/v1/messages`, {
@@ -113,7 +113,7 @@ async function callLongCat(systemPrompt: string, userPrompt: string, maxTokens =
   } catch (error) {
     clearTimeout(timeoutId)
     if ((error as Error).name === 'AbortError') {
-      throw new Error('LongCat API 请求超时（60秒）')
+      throw new Error('LongCat API 请求超时（120秒）')
     }
     throw error
   }

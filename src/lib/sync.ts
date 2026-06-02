@@ -4,7 +4,7 @@ import { dedupItems } from '@/lib/crawler'
 import { batchClassify, generateDeepReasons, generateDailyWithSections } from '@/lib/ai'
 import { RawItem } from '@/lib/sources/types'
 
-const BATCH_SIZE = 12
+const BATCH_SIZE = 6
 
 /** 消费端低质量内容硬过滤 */
 function isLowQualityConsumerContent(title: string, content: string): boolean {

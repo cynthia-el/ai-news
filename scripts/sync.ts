@@ -170,7 +170,7 @@ async function fetchArticleDetail(url: string): Promise<{ content: string; date:
   }
 }
 
-const BATCH_SIZE = 12
+const BATCH_SIZE = 6
 
 // ============================================================
 // 硬过滤规则 — 消费端低质量内容一票否决
