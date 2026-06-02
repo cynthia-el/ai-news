@@ -149,7 +149,23 @@ export class WebAdapter implements SourceAdapter {
       $(cfg.listSelector).each((_, element) => {
         const el = $(element)
         const titleEl = el.find(cfg.itemSelector!.title).first()
-        const title = (titleEl.attr('title') || titleEl.text()).trim()
+
+        // 优先用页面显示的文本（通常更完整），被截断时才 fallback 到 title 属性
+        let title = titleEl.text().trim()
+        const isTruncated = title.endsWith('...') || title.endsWith('…') || title.endsWith('..')
+        if (!title || isTruncated) {
+          const attrTitle = titleEl.attr('title')
+          if (attrTitle && attrTitle.trim().length > title.length) {
+            title = attrTitle.trim()
+          }
+        }
+        // 仍不完整则尝试父级 <a> 标签的 title
+        if (!title || title.endsWith('...') || title.endsWith('…')) {
+          const parentATitle = titleEl.closest('a').attr('title')
+          if (parentATitle && parentATitle.trim().length > title.length) {
+            title = parentATitle.trim()
+          }
+        }
         const link = titleEl.attr('href') || el.find(cfg.itemSelector!.link).first().attr('href') || el.attr('href') || ''
         const summary = cfg.itemSelector!.summary
           ? el.find(cfg.itemSelector!.summary).first().text().trim()
