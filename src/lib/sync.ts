@@ -118,6 +118,13 @@ async function processCrawledItems(rawItems: RawItem[]) {
   const sourceStats: Record<string, { fetched: number; added: number; failed: number }> = {}
   for (let i = 0; i < allResults.length; i++) {
     const { raw, category, summary, score, tags } = allResults[i]
+
+    // 3 分以下直接丢弃
+    if (score < 3) {
+      skipped++
+      continue
+    }
+
     const reason = reasonsMap.get(i) || (score >= 6 ? '行业战略资讯，建议关注' : '行业相关资讯')
 
     if (!sourceStats[raw.source]) sourceStats[raw.source] = { fetched: 0, added: 0, failed: 0 }

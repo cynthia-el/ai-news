@@ -516,6 +516,12 @@ async function processCrawledItems(rawItems: RawItem[], crawlStartTime: Date) {
     const reason = reasonsMap.get(i) || (finalScore >= 6 ? '行业战略资讯，建议关注' : '行业相关资讯')
     const isSelected = finalScore >= 6
 
+    // 3 分以下直接丢弃，不入库
+    if (finalScore < 3) {
+      skipped++
+      continue
+    }
+
     if (!sourceStats[raw.source]) {
       sourceStats[raw.source] = { fetched: 0, added: 0, failed: 0 }
     }

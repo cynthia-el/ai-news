@@ -38,6 +38,7 @@ export default async function DailyPage() {
       ? await prisma.item.findMany({
           where: {
             id: { in: allItemIds },
+            score: { gte: 3 },
           },
           orderBy: { score: 'desc' },
           include: {

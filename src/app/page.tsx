@@ -8,6 +8,7 @@ export default async function Home() {
     noStore()
   }
   const items = await prisma.item.findMany({
+    where: { score: { gte: 3 } },
     orderBy: { publishedAt: 'desc' },
     take: 150,
     include: {
