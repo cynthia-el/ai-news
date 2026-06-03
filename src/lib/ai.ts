@@ -154,7 +154,7 @@ export async function batchClassify(
     .map((item, i) => {
       const sourceInfo = item.source ? ` [信源: ${item.source}]` : ''
       const dateInfo = item.publishedAt ? ` [日期: ${item.publishedAt.toISOString().slice(0, 10)}]` : ''
-      return `${i + 1}. 标题：${item.title}${sourceInfo}${dateInfo}\n   正文：${item.content.slice(0, 500)}`
+      return `${i + 1}. 标题：${item.title}${sourceInfo}${dateInfo}\n   正文：${item.content.slice(0, 300)}`
     })
     .join('\n\n')
 
@@ -259,7 +259,7 @@ ${itemsText}
 ]`
 
   try {
-    const text = await callLongCat('', prompt, 4000)
+    const text = await callLongCat('', prompt, 8000)
     const jsonMatch = text.match(/\[[\s\S]*\]/)
     if (!jsonMatch) throw new Error('AI 返回格式错误')
 

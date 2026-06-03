@@ -263,7 +263,7 @@ function isJunkText(text: string): boolean {
   return hitCount >= 2
 }
 
-const BATCH_SIZE = 3
+const BATCH_SIZE = 2
 
 // ============================================================
 // 硬过滤规则 — 消费端低质量内容一票否决

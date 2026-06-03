@@ -1,13 +1,10 @@
 import { prisma } from '@/lib/prisma'
 import DailyClient from './DailyClient'
 
-export default async function DailyPage() {
-  // Vercel SSR 时禁用缓存以获取最新数据；静态导出时允许静态生成
-  if (!process.env.EXPORT_STATIC) {
-    const { unstable_noStore: noStore } = await import('next/cache')
-    noStore()
-  }
+// revalidate=0: Vercel上每次请求都刷新数据；静态导出时构建为静态HTML
+export const revalidate = 0
 
+export default async function DailyPage() {
   const today = new Date().toISOString().split('T')[0]
 
   const dailiesRaw = await prisma.daily.findMany({

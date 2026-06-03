@@ -1,12 +1,10 @@
 import { prisma } from '@/lib/prisma'
 import HomeClient from './HomeClient'
 
+// revalidate=0: Vercel上每次请求都刷新数据；静态导出时构建为静态HTML
+export const revalidate = 0
+
 export default async function Home() {
-  // Vercel SSR 时禁用缓存以获取最新数据；静态导出时允许静态生成
-  if (!process.env.EXPORT_STATIC) {
-    const { unstable_noStore: noStore } = await import('next/cache')
-    noStore()
-  }
   const items = await prisma.item.findMany({
     orderBy: { publishedAt: 'desc' },
     take: 150,
