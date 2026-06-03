@@ -4,7 +4,7 @@ import { dedupItems } from '@/lib/crawler'
 import { batchClassify, generateDeepReasons, generateDailyWithSections } from '@/lib/ai'
 import { RawItem } from '@/lib/sources/types'
 
-const BATCH_SIZE = 6
+const BATCH_SIZE = 3
 
 /** 消费端低质量内容硬过滤 */
 function isLowQualityConsumerContent(title: string, content: string): boolean {
@@ -80,7 +80,7 @@ async function processCrawledItems(rawItems: RawItem[]) {
           allResults.push({ raw: batch[j], ...result })
         }
       }
-      if (i + BATCH_SIZE < afterHardFilter.length) await new Promise((r) => setTimeout(r, 800))
+      if (i + BATCH_SIZE < afterHardFilter.length) await new Promise((r) => setTimeout(r, 3000))
     } catch (error) {
       console.error(`[Cron] 批次失败:`, (error as Error).message)
       for (const item of batch) {

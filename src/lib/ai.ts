@@ -72,6 +72,10 @@ const SENTIMENT_TAGS = ['正面', '中性', '风险']
 // API 调用
 // ============================================================
 
+async function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 async function callLongCat(systemPrompt: string, userPrompt: string, maxTokens = 4000): Promise<string> {
   const messages: { role: string; content: string }[] = []
   if (systemPrompt) {
@@ -79,44 +83,62 @@ async function callLongCat(systemPrompt: string, userPrompt: string, maxTokens =
   }
   messages.push({ role: 'user', content: userPrompt })
 
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 120000)
+  let lastError: Error | null = null
 
-  try {
-    const response = await fetch(`${BASE_URL}/v1/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: maxTokens,
-        messages,
-      }),
-      signal: controller.signal,
-    })
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 120000)
 
-    clearTimeout(timeoutId)
+    try {
+      const response = await fetch(`${BASE_URL}/v1/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${API_KEY}`,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: maxTokens,
+          messages,
+        }),
+        signal: controller.signal,
+      })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error(`[AI API Error] Status: ${response.status}, Content-Type: ${response.headers.get('content-type')}`)
-      console.error(`[AI API Error] Body: ${errorText.slice(0, 500)}`)
-      throw new Error(`LongCat API ${response.status}: ${errorText.slice(0, 200)}`)
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        // 429 rate limit: 指数退避重试
+        if (response.status === 429 && attempt < 3) {
+          const delay = attempt * 3000
+          console.log(`[AI API] 429 限流，${delay}ms 后重试 (第${attempt}次)...`)
+          await sleep(delay)
+          continue
+        }
+        console.error(`[AI API Error] Status: ${response.status}, Content-Type: ${response.headers.get('content-type')}`)
+        console.error(`[AI API Error] Body: ${errorText.slice(0, 500)}`)
+        throw new Error(`LongCat API ${response.status}: ${errorText.slice(0, 200)}`)
+      }
+
+      const data = await response.json()
+      const text = data.content?.[0]?.text || ''
+      return text
+    } catch (error) {
+      clearTimeout(timeoutId)
+      if ((error as Error).name === 'AbortError') {
+        throw new Error('LongCat API 请求超时（120秒）')
+      }
+      lastError = error as Error
+      if (attempt < 3) {
+        const delay = attempt * 3000
+        console.log(`[AI API] 请求失败，${delay}ms 后重试 (第${attempt}次): ${lastError.message}`)
+        await sleep(delay)
+      }
     }
-
-    const data = await response.json()
-    const text = data.content?.[0]?.text || ''
-    return text
-  } catch (error) {
-    clearTimeout(timeoutId)
-    if ((error as Error).name === 'AbortError') {
-      throw new Error('LongCat API 请求超时（120秒）')
-    }
-    throw error
   }
+
+  throw lastError || new Error('LongCat API 请求失败')
 }
 
 // ============================================================
@@ -132,7 +154,7 @@ export async function batchClassify(
     .map((item, i) => {
       const sourceInfo = item.source ? ` [信源: ${item.source}]` : ''
       const dateInfo = item.publishedAt ? ` [日期: ${item.publishedAt.toISOString().slice(0, 10)}]` : ''
-      return `${i + 1}. 标题：${item.title}${sourceInfo}${dateInfo}\n   正文：${item.content.slice(0, 1000)}`
+      return `${i + 1}. 标题：${item.title}${sourceInfo}${dateInfo}\n   正文：${item.content.slice(0, 500)}`
     })
     .join('\n\n')
 

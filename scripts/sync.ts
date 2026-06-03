@@ -141,36 +141,129 @@ async function fetchArticleDetail(url: string): Promise<{ content: string; date:
     const date = extractDateFromHtml(html)
     const $ = cheerio.load(html)
 
-    $('script, style, nav, header, footer, aside, .ad, .advertisement, .related-read, .comments, iframe, .sidebar').remove()
+    // 移除干扰元素（导航、广告、免责声明、页脚、面包屑等）
+    const junkSelectors = [
+      'script', 'style', 'nav', 'header', 'footer', 'aside', 'iframe', '.ad', '.advertisement',
+      '.related-read', '.comments', '.sidebar', '.breadcrumb', '.share', '.tags',
+      '.copyright', '.warning', '.notice', '.tip', '.declare', '.statement',
+      '.disclaimer', '.legal', '.prompt', '[class*="copy"]',
+      '[class*="warning"]', '[class*="notice"]', '[class*="tip"]',
+      '[class*="declare"]', '[class*="legal"]', '[class*="prompt"]',
+      '[class*="disclaimer"]', '[class*="breadcrumb"]', '[class*="share"]',
+      '.db-related', '.db-prevnext', '.pagination', '.page-nav',
+      '#comment', '.comment', '.reply', '.post-copyright',
+      'form', 'input', 'textarea', 'button', 'select',
+    ]
+    junkSelectors.forEach(sel => $(sel).remove())
 
+    // 优先使用高置信度的正文选择器（从具体到宽泛）
     const selectors = [
-      'article', '.article-content', '.content-detail', '#artibody', '.post-content',
-      '.entry-content', '.news-content', '.detail-content', '.main-content',
-      '[class*="content"]', '[class*="article"]', 'main', '.text', '.txt',
+      '#artibody',                  // 新浪
+      '.TRS_Editor',                // 政府网站
+      'article .content',           // 语义化 + 内容区
+      'article',                    // 语义化文章标签
+      '.article-content',           // 文章内容
+      '.content-detail',            // 详情内容
+      '.post-content',              // 博客内容
+      '.entry-content',             // CMS内容
+      '.news-content',              // 新闻内容
+      '.detail-content',            // 详情页内容
+      '.main-content',              // 主内容区
+      '.db-contxt',                 // 中华地板网
+      '.contxt', '.context',        // 通用内容
+      '[class*="article-body"]',    // 文章主体
+      '[class*="article_body"]',    // 文章主体
+      '[class*="articleBody"]',     // 文章主体
+      '[class*="post-body"]',       // 文章主体
+      '[class*="post_body"]',       // 文章主体
+      '[class*="news-body"]',       // 新闻主体
+      '[class*="news_body"]',       // 新闻主体
+      '[class*="detail-body"]',     // 详情主体
+      '[class*="detail_body"]',     // 详情主体
+      '[class*="content-body"]',    // 内容主体
+      '[class*="content_body"]',    // 内容主体
+      '[class*="text-body"]',       // 文本主体
+      'main',                       // 语义化主内容
     ]
 
     for (const sel of selectors) {
       const el = $(sel).first()
       if (el.length) {
+        // 移除子干扰元素
+        el.find('.ad, .advertisement, .share, .tags, .copyright, .related-read, .comments').remove()
         const text = el.text().trim()
-        if (text.length > 200) {
+        // 过滤掉纯法律声明/免责声明（通常包含特定关键词且很短）
+        if (text.length > 300 && !isJunkText(text)) {
           return { content: text.slice(0, 5000), date }
         }
       }
     }
 
+    // fallback: 基于段落密度的算法——找包含最多连续段落的区域
+    let bestNode: cheerio.Cheerio | null = null
+    let bestScore = 0
+
+    $('div, section').each((_, node) => {
+      const $node = $(node)
+      const paragraphs = $node.find('p')
+      if (paragraphs.length < 3) return
+
+      let textLength = 0
+      paragraphs.each((_, p) => {
+        textLength += $(p).text().trim().length
+      })
+
+      // 评分 = 段落数 * 平均段落长度
+      const avgLen = textLength / paragraphs.length
+      const score = paragraphs.length * avgLen
+
+      if (score > bestScore) {
+        bestScore = score
+        bestNode = $node
+      }
+    })
+
+    if (bestNode && bestScore > 500) {
+      bestNode.find('.ad, .advertisement, .share, .tags, .copyright').remove()
+      const text = bestNode.text().trim()
+      if (text.length > 300 && !isJunkText(text)) {
+        return { content: text.slice(0, 5000), date }
+      }
+    }
+
+    // 最后 fallback: 找最长的段落
     let bestText = ''
     $('p').each((_, p) => {
       const t = $(p).text().trim()
       if (t.length > bestText.length) bestText = t
     })
+
     return { content: bestText.slice(0, 5000), date }
   } catch {
     return { content: '', date: null }
   }
 }
 
-const BATCH_SIZE = 6
+/** 判断文本是否为免责声明/法律声明等垃圾内容 */
+function isJunkText(text: string): boolean {
+  const lower = text.toLowerCase()
+  const junkPatterns = [
+    /温馨提醒[：:]/, /免责声明/, /法律声明/, /版权声明/, /风险提示/,
+    /加盟.*投资.*风险/, /本网站不承担任何责任/, /自行审核风险/,
+    /谨防受骗/, /最终确认的为准/, /不承担任何责任/,
+    /部分企业可能不开放加盟/, /投资开店.*核实.*确认/,
+    /风险提示.*仅供参考/, /不代表.*立场/, /不构成.*建议/,
+  ]
+  // 如果前200字包含3个以上的垃圾关键词，判定为垃圾内容
+  const prefix = lower.slice(0, 400)
+  let hitCount = 0
+  for (const pattern of junkPatterns) {
+    if (pattern.test(prefix)) hitCount++
+  }
+  return hitCount >= 2
+}
+
+const BATCH_SIZE = 3
 
 // ============================================================
 // 硬过滤规则 — 消费端低质量内容一票否决
@@ -352,28 +445,33 @@ async function processCrawledItems(rawItems: RawItem[], crawlStartTime: Date) {
   for (const item of recentItems) {
     const d = new Date(item.publishedAt)
     const isFallback = Math.abs(d.getTime() - crawlStartTime.getTime()) < 2 * 60 * 1000
-    if (!isFallback) continue
+
+    // 两种情况需要爬详情页：1) 日期是fallback（没有正确日期）2) 内容太短（<300字）
+    const needsDetail = isFallback || item.content.length < 300
+    if (!needsDetail) continue
 
     try {
       const detail = await fetchArticleDetail(item.url)
-      if (detail.content && item.content.length < 300 && detail.content.length > item.content.length + 100) {
+      if (detail.content && detail.content.length > item.content.length + 50) {
         item.content = detail.content.slice(0, 5000)
       }
       if (detail.content && detail.content.length > 200) {
         detailCrawled++
       }
-      if (detail.date) {
+      if (detail.date && isFallback) {
         const oldDate = item.publishedAt
         item.publishedAt = detail.date
         dateCorrected++
         console.log(`  [日期修正] ${item.title.slice(0, 35)}... ${oldDate?.toISOString().slice(0,10)} → ${detail.date.toISOString().slice(0,10)}`)
-      } else {
+      } else if (isFallback && !detail.date) {
         dateFailed++
         item.publishedAt = null as any
       }
     } catch {
-      dateFailed++
-      item.publishedAt = null as any
+      if (isFallback) {
+        dateFailed++
+        item.publishedAt = null as any
+      }
     }
   }
   if (detailCrawled > 0 || dateCorrected > 0) {
@@ -440,7 +538,7 @@ async function processCrawledItems(rawItems: RawItem[], crawlStartTime: Date) {
       }
 
       if (i + BATCH_SIZE < afterPostCrawlFilter.length) {
-        await new Promise((resolve) => setTimeout(resolve, 800))
+        await new Promise((resolve) => setTimeout(resolve, 3000))
       }
     } catch (error) {
       console.error(`  ✗ 批次处理失败:`, (error as Error).message)
