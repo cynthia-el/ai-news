@@ -203,9 +203,14 @@ export class WebAdapter implements SourceAdapter {
             } catch { /* 解析失败则保留原链接 */ }
           }
 
+          // keywords 过滤：如果配置了关键词，标题必须包含至少一个
+          if (cfg.keywords && Array.isArray(cfg.keywords) && cfg.keywords.length > 0) {
+            const text = (titleClean + ' ' + summary).toLowerCase()
+            const matched = cfg.keywords.some((kw: string) => text.includes(kw.toLowerCase()))
+            if (!matched) return
+          }
+
           let parsedDate = parseDate(dateText)
-          // 无法解析日期的条目保留，使用当前时间作为fallback
-          // （首页列表上的文章通常较新，后续在sync.ts中用内容/URL进一步过滤旧文）
           if (!parsedDate) parsedDate = new Date()
 
           items.push({
