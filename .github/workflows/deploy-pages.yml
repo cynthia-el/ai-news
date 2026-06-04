@@ -43,6 +43,13 @@ jobs:
           rm -rf src/app/feed
           echo "Done."
 
+      - name: Remove dynamic revalidate for static export
+        run: |
+          echo "Removing export const revalidate = 0 from page components for static export"
+          sed -i '/export const revalidate = 0/d' src/app/page.tsx
+          sed -i '/export const revalidate = 0/d' src/app/daily/page.tsx
+          echo "Done."
+
       - name: Build static export
         run: npx next build
         timeout-minutes: 15
