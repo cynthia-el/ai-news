@@ -856,12 +856,26 @@ async function main() {
   console.log('╚══════════════════════════════════════════╝')
   console.log(`\n开始时间: ${new Date().toLocaleString('zh-CN')}`)
 
-  const crawlLog = await prisma.crawlLog.create({
-    data: {
-      status: 'running',
-      startedAt: new Date(),
-    },
-  })
+  // 支持通过命令行参数传入 log_id，复用已创建的 crawlLog
+  const logId = process.argv[2]
+  let crawlLog
+
+  if (logId) {
+    const existing = await prisma.crawlLog.findUnique({ where: { id: logId } })
+    if (existing) {
+      crawlLog = existing
+      console.log(`📋 复用已有同步记录: ${logId.slice(0, 8)}`)
+    }
+  }
+
+  if (!crawlLog) {
+    crawlLog = await prisma.crawlLog.create({
+      data: {
+        status: 'running',
+        startedAt: new Date(),
+      },
+    })
+  }
 
   const crawlStartTime = new Date()
   let rawItems: RawItem[] = []

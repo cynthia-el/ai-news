@@ -2,6 +2,11 @@ name: Sync Data
 
 on:
   workflow_dispatch:
+    inputs:
+      log_id:
+        description: 'Crawl log ID to update'
+        required: false
+        type: string
 
 jobs:
   sync:
@@ -30,7 +35,7 @@ jobs:
         run: npx prisma generate
 
       - name: Run sync
-        run: npx tsx scripts/sync.ts
+        run: npx tsx scripts/sync.ts ${{ github.event.inputs.log_id }}
 
       - name: Trigger Cloudflare Pages deploy
         if: success()
