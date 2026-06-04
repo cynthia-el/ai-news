@@ -331,7 +331,7 @@ ${itemsText}
       return {
         index: r.index || idx + 1,
         category,
-        summary: r.summary?.slice(0, 250) || items[idx]?.title?.slice(0, 50) || '',
+        summary: r.summary || items[idx]?.title?.slice(0, 50) || '',
         score,
         tags: tags.slice(0, 5),
       }
@@ -387,7 +387,7 @@ ${itemsText}
     const results: { index: number; reason: string }[] = JSON.parse(jsonMatch[0])
     return items.map((_, idx) => {
       const found = results.find((r) => r.index === idx + 1)
-      return found?.reason?.slice(0, 120) || '行业战略资讯，建议关注'
+      return found?.reason || '行业战略资讯，建议关注'
     })
   } catch (error) {
     console.error('战略解读生成失败:', error)

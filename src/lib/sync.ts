@@ -108,7 +108,7 @@ async function processCrawledItems(rawItems: RawItem[]) {
           const idx = allResults.indexOf(batch[j])
           reasonsMap.set(idx, reasons[j] || '行业战略资讯，建议关注')
         }
-        if (i + BATCH_SIZE < highScoreItems.length) await new Promise((r) => setTimeout(r, 600))
+        if (i + BATCH_SIZE < highScoreItems.length) await new Promise((r) => setTimeout(r, 3000))
       } catch (error) {
         console.error(`[Cron] 战略解读失败:`, (error as Error).message)
       }

@@ -9,6 +9,47 @@ import { RawItem } from '../src/lib/sources/types'
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
+/** 触发 Cloudflare Pages 重新构建部署 */
+async function triggerDeploy() {
+  const githubToken = process.env.GITHUB_TOKEN
+  const repoOwner = process.env.VERCEL_GIT_REPO_OWNER
+  const repoSlug = process.env.VERCEL_GIT_REPO_SLUG
+
+  if (!githubToken) {
+    console.log('⚠️ GITHUB_TOKEN 未配置，跳过自动触发部署')
+    return
+  }
+
+  const owner = repoOwner || 'cynthia-el'
+  const slug = repoSlug || 'ai-news'
+
+  try {
+    console.log('\n🚀 触发 Cloudflare Pages 重新构建部署...')
+    const res = await fetch(
+      `https://api.github.com/repos/${owner}/${slug}/actions/workflows/deploy-pages.yml/dispatches`,
+      {
+        method: 'POST',
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${githubToken}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ref: 'main' }),
+      }
+    )
+
+    if (res.ok) {
+      console.log('✅ 已触发 deploy-pages workflow，静态站点将在几分钟后更新')
+    } else {
+      const text = await res.text()
+      console.error(`❌ 触发部署失败: ${res.status} ${text}`)
+    }
+  } catch (error) {
+    console.error('触发部署出错:', (error as Error).message)
+  }
+}
+
 /** 获取HTML并自动检测编码（处理gbk/gb2312等） */
 async function fetchHtmlWithEncoding(url: string, timeout = 10000): Promise<string> {
   const controller = new AbortController()
@@ -571,7 +612,7 @@ async function processCrawledItems(rawItems: RawItem[], crawlStartTime: Date) {
           reasonsMap.set(idx, reasons[j] || '行业战略资讯，建议关注')
         }
         if (i + BATCH_SIZE < highScoreItems.length) {
-          await new Promise((resolve) => setTimeout(resolve, 600))
+          await new Promise((resolve) => setTimeout(resolve, 3000))
         }
       } catch (error) {
         console.error(`  ✗ 战略解读生成失败:`, (error as Error).message)
@@ -888,6 +929,9 @@ async function main() {
     console.log(`  处理失败: ${result.failed} 条`)
     console.log(`  日报生成: ${dailyGenerated ? '✓' : '✗'}`)
     console.log(`\n结束时间: ${new Date().toLocaleString('zh-CN')}`)
+
+    // 触发 Cloudflare Pages 重新构建
+    await triggerDeploy()
   } catch (error) {
     errorMessage = (error as Error).message
 

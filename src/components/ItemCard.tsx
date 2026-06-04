@@ -21,10 +21,8 @@ export function ItemCard({ item }: ItemCardProps) {
   const dateObj = new Date(item.publishedAt)
   const dateStr = dateObj.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
 
-  // 摘要最多200字
-  const summaryText = item.summary
-    ? item.summary.slice(0, 200) + (item.summary.length > 200 ? '...' : '')
-    : ''
+  // 完整显示摘要，不做截断
+  const summaryText = item.summary || ''
 
   return (
     <article className="group bg-white rounded-lg border border-slate-200 hover:border-slate-300 transition-colors">
