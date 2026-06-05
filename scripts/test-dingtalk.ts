@@ -2,11 +2,11 @@
  * 钉钉日报推送测试脚本
  *
  * 用法:
- *   npx tsx scripts/test-dingtalk.ts          # 推送昨天的日报
+ *   npx tsx scripts/test-dingtalk.ts          # 推送昨天的日报到所有激活的 webhook
  *   npx tsx scripts/test-dingtalk.ts 2026-06-04  # 推送指定日期的日报
  *
  * 环境变量要求:
- *   - DINGTALK_WEBHOOK_URL（必填）
+ *   - DATABASE_URL（必填）
  *   - NEXT_PUBLIC_SITE_URL（可选，默认 https://your-site.com）
  */
 
@@ -20,13 +20,6 @@ async function main() {
   console.log('╔══════════════════════════════════════════╗')
   console.log('║       钉钉日报推送 - 手动测试工具         ║')
   console.log('╚══════════════════════════════════════════╝')
-
-  if (!process.env.DINGTALK_WEBHOOK_URL) {
-    console.error('\n❌ 错误: DINGTALK_WEBHOOK_URL 环境变量未设置')
-    console.error('   请在 .env 文件中添加:')
-    console.error('   DINGTALK_WEBHOOK_URL=https://oapi.dingtalk.com/robot/send?access_token=xxx')
-    process.exit(1)
-  }
 
   // 检查是否有日报数据
   const targetDate = dateArg || new Date(Date.now() - 86400000).toISOString().split('T')[0]
@@ -54,12 +47,13 @@ async function main() {
   }
 
   console.log(`\n📅 推送日期: ${targetDate}`)
-  console.log(`📰 日报标题: ${daily.title}`)
-  console.log(`🤖 机器人: ${process.env.DINGTALK_WEBHOOK_URL.slice(0, 50)}...\n`)
+  console.log(`📰 日报标题: ${daily.title}\n`)
 
-  const success = await pushDailyToDingTalk(targetDate, false)
+  const result = await pushDailyToDingTalk(targetDate, false)
 
-  if (success) {
+  console.log(`\n📊 推送结果: ${result.pushedCount}/${result.totalCount} 个群成功`)
+
+  if (result.success) {
     console.log('\n✅ 测试推送成功！请检查钉钉群消息')
   } else {
     console.error('\n❌ 测试推送失败，请检查日志')

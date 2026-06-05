@@ -1,13 +1,16 @@
 import crypto from 'crypto'
 import { prisma } from './prisma'
 
-const DINGTALK_WEBHOOK_URL = process.env.DINGTALK_WEBHOOK_URL
-const DINGTALK_SECRET = process.env.DINGTALK_SECRET
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://your-site.com'
 
 interface DingTalkResponse {
   errcode: number
   errmsg: string
+}
+
+export interface WebhookConfig {
+  url: string
+  secret?: string | null
 }
 
 /** 钉钉加签算法：HMAC-SHA256(base64) */
@@ -22,25 +25,21 @@ function generateSign(secret: string): { timestamp: string; sign: string } {
 }
 
 /** 构建带签名的钉钉 Webhook URL */
-function buildSignedUrl(baseUrl: string, secret?: string): string {
+function buildSignedUrl(baseUrl: string, secret?: string | null): string {
   if (!secret) return baseUrl
   const { timestamp, sign } = generateSign(secret)
   const separator = baseUrl.includes('?') ? '&' : '?'
   return `${baseUrl}${separator}timestamp=${timestamp}&sign=${encodeURIComponent(sign)}`
 }
 
-/** 发送 markdown 消息到钉钉群 */
-export async function sendDingTalkMarkdown(
+/** 发送 markdown 消息到指定的钉钉 webhook */
+export async function sendDingTalkMarkdownToWebhook(
+  webhook: WebhookConfig,
   title: string,
   markdownText: string,
   atAll: boolean = false
 ): Promise<boolean> {
-  if (!DINGTALK_WEBHOOK_URL) {
-    console.error('❌ DINGTALK_WEBHOOK_URL 未配置，跳过钉钉推送')
-    return false
-  }
-
-  const url = buildSignedUrl(DINGTALK_WEBHOOK_URL, DINGTALK_SECRET)
+  const url = buildSignedUrl(webhook.url, webhook.secret)
 
   try {
     const payload: {
@@ -67,7 +66,7 @@ export async function sendDingTalkMarkdown(
       return false
     }
 
-    console.log('✅ 钉钉推送成功')
+    console.log('✅ 钉钉推送成功:', webhook.url.slice(0, 50) + '...')
     return true
   } catch (error) {
     console.error('❌ 钉钉推送异常:', (error as Error).message)
@@ -133,13 +132,29 @@ function formatDailyMarkdown(
   return md
 }
 
-/** 查询指定日期的日报并推送到钉钉 */
-export async function pushDailyToDingTalk(dateStr?: string, atAll: boolean = false): Promise<boolean> {
-  // 默认推送昨天
-  const targetDate =
-    dateStr || new Date(Date.now() - 86400000).toISOString().split('T')[0]
+/** 查询指定日期的日报并推送到指定的 webhooks（默认推送所有激活的 webhooks） */
+export async function pushDailyToDingTalk(
+  dateStr?: string,
+  atAll: boolean = false,
+  targetWebhooks?: WebhookConfig[]
+): Promise<{ success: boolean; pushedCount: number; totalCount: number; date: string }> {
+  const targetDate = dateStr || new Date(Date.now() - 86400000).toISOString().split('T')[0]
 
   console.log(`\n📲 开始推送日报到钉钉: ${targetDate}`)
+
+  // 如果没有指定 webhooks，从数据库读取所有激活的
+  let webhooks = targetWebhooks
+  if (!webhooks) {
+    webhooks = await prisma.dingTalkWebhook.findMany({
+      where: { isActive: true },
+      select: { url: true, secret: true },
+    })
+  }
+
+  if (webhooks.length === 0) {
+    console.log('⚠️  没有配置钉钉 Webhook，跳过推送')
+    return { success: false, pushedCount: 0, totalCount: 0, date: targetDate }
+  }
 
   const daily = await prisma.daily.findUnique({
     where: { date: targetDate },
@@ -148,7 +163,7 @@ export async function pushDailyToDingTalk(dateStr?: string, atAll: boolean = fal
 
   if (!daily) {
     console.log(`⚠️  ${targetDate} 暂无日报，跳过推送`)
-    return false
+    return { success: false, pushedCount: 0, totalCount: webhooks.length, date: targetDate }
   }
 
   // 获取日报关联的所有条目
@@ -159,8 +174,6 @@ export async function pushDailyToDingTalk(dateStr?: string, atAll: boolean = fal
       id: true,
       title: true,
       url: true,
-      summary: true,
-      reason: true,
       score: true,
     },
   })
@@ -180,11 +193,62 @@ export async function pushDailyToDingTalk(dateStr?: string, atAll: boolean = fal
   const dateLabel = `${d.getMonth() + 1}月${d.getDate()}日`
   const markdown = formatDailyMarkdown(daily, itemMap)
 
-  const success = await sendDingTalkMarkdown(
-    `家居战略资讯日报 · ${dateLabel}`,
-    markdown,
-    atAll
-  )
+  let pushedCount = 0
+  for (const webhook of webhooks) {
+    const success = await sendDingTalkMarkdownToWebhook(
+      webhook,
+      `家居战略资讯日报 · ${dateLabel}`,
+      markdown,
+      atAll
+    )
+    if (success) pushedCount++
+  }
 
-  return success
+  console.log(`\n📊 推送完成: ${pushedCount}/${webhooks.length} 个群成功`)
+  return {
+    success: pushedCount > 0,
+    pushedCount,
+    totalCount: webhooks.length,
+    date: targetDate,
+  }
+}
+
+/** 验证 webhook URL 是否可访问（仅验证格式） */
+export function isValidDingTalkWebhookUrl(url: string): boolean {
+  return url.startsWith('https://oapi.dingtalk.com/robot/send?access_token=')
+}
+
+/** Webhook CRUD 辅助函数 */
+export async function getActiveWebhooks(): Promise<WebhookConfig[]> {
+  return prisma.dingTalkWebhook.findMany({
+    where: { isActive: true },
+    select: { url: true, secret: true },
+  })
+}
+
+export async function getAllWebhooks() {
+  return prisma.dingTalkWebhook.findMany({
+    orderBy: { createdAt: 'desc' },
+  })
+}
+
+export async function createWebhook(data: { name: string; url: string; secret?: string }) {
+  return prisma.dingTalkWebhook.create({
+    data: {
+      name: data.name,
+      url: data.url,
+      secret: data.secret || null,
+    },
+  })
+}
+
+export async function deleteWebhook(id: string) {
+  return prisma.dingTalkWebhook.delete({ where: { id } })
+}
+
+export async function toggleWebhook(id: string, isActive: boolean) {
+  return prisma.dingTalkWebhook.update({
+    where: { id },
+    data: { isActive },
+  })
 }

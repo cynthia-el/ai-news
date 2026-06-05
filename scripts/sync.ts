@@ -920,9 +920,12 @@ async function main() {
 
     if (dailyGenerated) {
       console.log('\n📲 正在推送日报到钉钉...')
-      await pushDailyToDingTalk().catch((err) => {
+      try {
+        const result = await pushDailyToDingTalk()
+        console.log(`  ✓ 钉钉推送完成: ${result.pushedCount}/${result.totalCount} 个群`)
+      } catch (err) {
         console.error('  ✗ 钉钉推送失败:', (err as Error).message)
-      })
+      }
     }
 
     await prisma.crawlLog.update({
