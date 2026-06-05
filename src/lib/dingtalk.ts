@@ -119,7 +119,7 @@ function formatDailyMarkdown(
   md += `###### ${month}月${day}日，星期${week}\n\n`
 
   if (daily.summary) {
-    md += `## 📌 **${daily.summary}**\n\n\n`
+    md += `📌 **${daily.summary}**\n\n\n\n`
   }
 
   for (let i = 0; i < orderedItems.length; i++) {
@@ -128,7 +128,7 @@ function formatDailyMarkdown(
     md += `${i + 1}. ${titleDisplay} [查看原文](${item.url})\n`
   }
 
-  md += `\n\n[查看完整日报及历史归档](${SITE_URL}/daily)\n`
+  md += `\n\n\n[查看完整日报及历史归档](${SITE_URL}/daily)\n`
 
   return md
 }
