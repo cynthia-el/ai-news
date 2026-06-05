@@ -6,6 +6,7 @@ import { crawlAllSources, flattenResults, loadActiveSources } from '../src/lib/c
 import { dedupItems } from '../src/lib/crawler'
 import { batchClassify, generateDeepReasons, generateDailyWithSections } from '../src/lib/ai'
 import { RawItem } from '../src/lib/sources/types'
+import { pushDailyToDingTalk } from '../src/lib/dingtalk'
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
@@ -916,6 +917,13 @@ async function main() {
 
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
     dailyGenerated = await generateDaily()
+
+    if (dailyGenerated) {
+      console.log('\n📲 正在推送日报到钉钉...')
+      await pushDailyToDingTalk().catch((err) => {
+        console.error('  ✗ 钉钉推送失败:', (err as Error).message)
+      })
+    }
 
     await prisma.crawlLog.update({
       where: { id: crawlLog.id },
