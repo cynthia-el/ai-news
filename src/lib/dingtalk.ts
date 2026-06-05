@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 import { prisma } from './prisma'
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://your-site.com'
+const SITE_URL = 'https://ai-news-static-3ar.pages.dev'
 
 interface DingTalkResponse {
   errcode: number
