@@ -1,8 +1,11 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
 
 // GET /api/admin/items - 获取资讯列表（带分页和筛选）
 export async function GET(request: NextRequest) {
+  const unauthorized = await requireAuth(request)
+  if (unauthorized) return unauthorized
   const { searchParams } = request.nextUrl
 
   const page = parseInt(searchParams.get('page') || '1')
@@ -55,6 +58,9 @@ export async function GET(request: NextRequest) {
 
 // PATCH /api/admin/items - 批量更新资讯
 export async function PATCH(request: NextRequest) {
+  const unauthorized = await requireAuth(request)
+  if (unauthorized) return unauthorized
+
   try {
     const body = await request.json()
     const { ids, action, data } = body

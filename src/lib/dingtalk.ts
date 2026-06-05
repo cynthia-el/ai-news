@@ -1,7 +1,38 @@
 import crypto from 'crypto'
 import { prisma } from './prisma'
+import { encrypt, decrypt } from './crypto'
 
 const SITE_URL = 'https://ai-news-static-3ar.pages.dev'
+
+/** 脱敏 webhook URL：只显示前 40 个字符 */
+function maskUrl(url: string): string {
+  if (url.length <= 45) return url
+  return url.slice(0, 40) + '...' + url.slice(-10)
+}
+
+/** 脱敏 secret */
+function maskSecret(secret: string | null): string | null {
+  if (!secret) return null
+  if (secret.length <= 8) return '****'
+  return secret.slice(0, 2) + '****' + secret.slice(-2)
+}
+
+/** 加密 webhook secret */
+export function encryptSecret(secret: string | null | undefined): string | null {
+  if (!secret || secret.trim() === '') return null
+  return encrypt(secret.trim())
+}
+
+/** 解密 webhook secret */
+export function decryptSecret(encrypted: string | null): string | null {
+  if (!encrypted) return null
+  try {
+    return decrypt(encrypted)
+  } catch {
+    // 如果解密失败，可能是旧数据（未加密的），直接返回
+    return encrypted
+  }
+}
 
 interface DingTalkResponse {
   errcode: number
@@ -142,13 +173,17 @@ export async function pushDailyToDingTalk(
 
   console.log(`\n📲 开始推送日报到钉钉: ${targetDate}`)
 
-  // 如果没有指定 webhooks，从数据库读取所有激活的
+  // 如果没有指定 webhooks，从数据库读取所有激活的并解密 secret
   let webhooks = targetWebhooks
   if (!webhooks) {
-    webhooks = await prisma.dingTalkWebhook.findMany({
+    const rows = await prisma.dingTalkWebhook.findMany({
       where: { isActive: true },
       select: { url: true, secret: true },
     })
+    webhooks = rows.map((r) => ({
+      url: r.url,
+      secret: decryptSecret(r.secret),
+    }))
   }
 
   if (webhooks.length === 0) {
@@ -218,18 +253,46 @@ export function isValidDingTalkWebhookUrl(url: string): boolean {
   return url.startsWith('https://oapi.dingtalk.com/robot/send?access_token=')
 }
 
+/** 脱敏后的 webhook 信息（用于前端展示） */
+export interface MaskedWebhook {
+  id: string
+  name: string
+  url: string
+  urlMasked: string
+  secret: string | null
+  secretMasked: string | null
+  isActive: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
 /** Webhook CRUD 辅助函数 */
 export async function getActiveWebhooks(): Promise<WebhookConfig[]> {
-  return prisma.dingTalkWebhook.findMany({
+  const rows = await prisma.dingTalkWebhook.findMany({
     where: { isActive: true },
     select: { url: true, secret: true },
   })
+  return rows.map((r) => ({
+    url: r.url,
+    secret: decryptSecret(r.secret),
+  }))
 }
 
-export async function getAllWebhooks() {
-  return prisma.dingTalkWebhook.findMany({
+export async function getAllWebhooks(): Promise<MaskedWebhook[]> {
+  const rows = await prisma.dingTalkWebhook.findMany({
     orderBy: { createdAt: 'desc' },
   })
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    url: r.url,
+    urlMasked: maskUrl(r.url),
+    secret: r.secret,
+    secretMasked: maskSecret(decryptSecret(r.secret)),
+    isActive: r.isActive,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+  }))
 }
 
 export async function createWebhook(data: { name: string; url: string; secret?: string }) {
@@ -237,7 +300,7 @@ export async function createWebhook(data: { name: string; url: string; secret?: 
     data: {
       name: data.name,
       url: data.url,
-      secret: data.secret || null,
+      secret: encryptSecret(data.secret),
     },
   })
 }

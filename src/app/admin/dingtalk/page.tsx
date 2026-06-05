@@ -5,8 +5,8 @@ import { useState, useEffect } from 'react'
 interface Webhook {
   id: string
   name: string
-  url: string
-  secret: string | null
+  urlMasked: string
+  secretMasked: string | null
   isActive: boolean
   createdAt: string
 }
@@ -237,8 +237,13 @@ export default function DingTalkAdminPage() {
                     )}
                   </div>
                   <div className="text-xs text-slate-400 mt-1 truncate">
-                    {webhook.url}
+                    {webhook.urlMasked}
                   </div>
+                  {webhook.secretMasked && (
+                    <div className="text-xs text-slate-300 mt-0.5">
+                      加签: {webhook.secretMasked}
+                    </div>
+                  )}
                   <div className="text-xs text-slate-300 mt-0.5">
                     添加于 {new Date(webhook.createdAt).toLocaleString('zh-CN')}
                   </div>

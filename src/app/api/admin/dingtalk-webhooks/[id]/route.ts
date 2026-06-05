@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,6 +10,9 @@ interface Params {
 
 /** DELETE /api/admin/dingtalk-webhooks/:id - 删除 webhook */
 export async function DELETE(request: NextRequest, { params }: Params) {
+  const unauthorized = await requireAuth(request)
+  if (unauthorized) return unauthorized
+
   try {
     const { id } = await params
 
@@ -26,6 +30,9 @@ export async function DELETE(request: NextRequest, { params }: Params) {
 
 /** PATCH /api/admin/dingtalk-webhooks/:id - 启用/禁用 webhook */
 export async function PATCH(request: NextRequest, { params }: Params) {
+  const unauthorized = await requireAuth(request)
+  if (unauthorized) return unauthorized
+
   try {
     const { id } = await params
     const body = await request.json()

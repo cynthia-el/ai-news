@@ -1,8 +1,12 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
 
 // GET /api/admin/sources - 列出所有信源
 export async function GET(request: NextRequest) {
+  const unauthorized = await requireAuth(request)
+  if (unauthorized) return unauthorized
+
   const { searchParams } = request.nextUrl
   const type = searchParams.get('type')
 
@@ -19,6 +23,9 @@ export async function GET(request: NextRequest) {
 
 // POST /api/admin/sources - 添加信源
 export async function POST(request: NextRequest) {
+  const unauthorized = await requireAuth(request)
+  if (unauthorized) return unauthorized
+
   try {
     const body = await request.json()
     const { name, type, url, config, category, priority } = body
@@ -53,6 +60,9 @@ export async function POST(request: NextRequest) {
 
 // PATCH /api/admin/sources - 更新信源
 export async function PATCH(request: NextRequest) {
+  const unauthorized = await requireAuth(request)
+  if (unauthorized) return unauthorized
+
   try {
     const body = await request.json()
     const { id, ...data } = body
@@ -77,6 +87,9 @@ export async function PATCH(request: NextRequest) {
 
 // DELETE /api/admin/sources - 删除信源
 export async function DELETE(request: NextRequest) {
+  const unauthorized = await requireAuth(request)
+  if (unauthorized) return unauthorized
+
   try {
     const { ids } = await request.json()
 

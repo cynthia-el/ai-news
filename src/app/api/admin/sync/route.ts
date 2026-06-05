@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -10,6 +11,9 @@ export const maxDuration = 30
  * 因此通过 GitHub API 触发 workflow_dispatch 在 GitHub Actions 中执行
  */
 export async function POST(request: NextRequest) {
+  const unauthorized = await requireAuth(request)
+  if (unauthorized) return unauthorized
+
   try {
     const githubToken = process.env.GITHUB_TOKEN
     const repoOwner = process.env.VERCEL_GIT_REPO_OWNER

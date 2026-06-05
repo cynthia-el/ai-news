@@ -1,15 +1,22 @@
 import { NextRequest } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { pushDailyToDingTalk, isValidDingTalkWebhookUrl } from '@/lib/dingtalk'
+import { requireAuth } from '@/lib/auth'
+import {
+  pushDailyToDingTalk,
+  isValidDingTalkWebhookUrl,
+  createWebhook,
+  getAllWebhooks,
+  decryptSecret,
+} from '@/lib/dingtalk'
 
 export const dynamic = 'force-dynamic'
 
-/** GET /api/admin/dingtalk-webhooks - 列出所有 webhook */
-export async function GET() {
+/** GET /api/admin/dingtalk-webhooks - 列出所有 webhook（脱敏） */
+export async function GET(request: NextRequest) {
+  const unauthorized = await requireAuth(request)
+  if (unauthorized) return unauthorized
+
   try {
-    const webhooks = await prisma.dingTalkWebhook.findMany({
-      orderBy: { createdAt: 'desc' },
-    })
+    const webhooks = await getAllWebhooks()
     return Response.json({ webhooks })
   } catch (error) {
     const message = (error as Error).message
@@ -20,6 +27,9 @@ export async function GET() {
 
 /** POST /api/admin/dingtalk-webhooks - 添加 webhook 并触发当日推送 */
 export async function POST(request: NextRequest) {
+  const unauthorized = await requireAuth(request)
+  if (unauthorized) return unauthorized
+
   try {
     const body = await request.json()
     const { name, url, secret } = body
@@ -36,19 +46,15 @@ export async function POST(request: NextRequest) {
     }
 
     // 检查是否已存在相同 URL
-    const existing = await prisma.dingTalkWebhook.findFirst({
-      where: { url: url.trim() },
-    })
-    if (existing) {
+    const all = await getAllWebhooks()
+    if (all.some((w) => w.url === url.trim())) {
       return Response.json({ error: '该 Webhook 已存在' }, { status: 409 })
     }
 
-    const webhook = await prisma.dingTalkWebhook.create({
-      data: {
-        name: name.trim(),
-        url: url.trim(),
-        secret: secret?.trim() || null,
-      },
+    const webhook = await createWebhook({
+      name: name.trim(),
+      url: url.trim(),
+      secret: secret?.trim(),
     })
 
     // 首次添加时触发当日推送（推送昨天的日报）
@@ -56,7 +62,7 @@ export async function POST(request: NextRequest) {
     try {
       const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
       pushResult = await pushDailyToDingTalk(yesterday, false, [
-        { url: webhook.url, secret: webhook.secret },
+        { url: webhook.url, secret: decryptSecret(webhook.secret) },
       ])
     } catch (pushErr) {
       console.error('[DingTalkWebhooks] 首次推送失败:', (pushErr as Error).message)
