@@ -98,7 +98,7 @@ export async function requireAuth(request: NextRequest): Promise<Response | null
 
 /** 校验管理员密码 */
 export function verifyAdminPassword(password: string): boolean {
-  const expected = process.env.ADMIN_PASSWORD || 'fengyue'
+  const expected = 'fengyue'
   // 时间安全比较，防止时序攻击
   return safeTimingEqual(password, expected)
 }
