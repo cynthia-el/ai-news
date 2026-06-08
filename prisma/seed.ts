@@ -46,6 +46,112 @@ const DEFAULT_SOURCES = [
     category: 'supply-chain',
     priority: 9,
   },
+  // 企业技术/专利/创新类信源
+  {
+    name: '中国木业网-企业动态',
+    type: 'RSS',
+    url: 'https://www.chinawood.org/rss/news.xml',
+    config: JSON.stringify({
+      itemSelector: {
+        title: 'title',
+        link: 'link',
+        date: 'pubDate',
+        summary: 'description',
+      },
+    }),
+    category: 'technology',
+    priority: 9,
+  },
+  {
+    name: '慧聪家居-技术频道',
+    type: 'WEB',
+    url: 'https://info.home.hc360.com/list/xinwen.shtml',
+    config: JSON.stringify({
+      listSelector: '.listbox ul li',
+      itemSelector: {
+        title: 'a',
+        link: 'a',
+        date: 'span.time',
+        summary: 'p.summary',
+      },
+      detailSelector: {
+        content: '.article-content, .content-detail, .TRS_Editor',
+        filter: '.ad, .advertisement, .related-read, script, style',
+      },
+    }),
+    category: 'technology',
+    priority: 8,
+  },
+  {
+    name: '国家知识产权局-专利公告',
+    type: 'RSS',
+    url: 'https://epub.cnipa.gov.cn/rss/gbtb.xml',
+    config: JSON.stringify({
+      itemSelector: {
+        title: 'title',
+        link: 'link',
+        date: 'pubDate',
+        summary: 'description',
+      },
+    }),
+    category: 'technology',
+    priority: 10,
+  },
+  {
+    name: '中国定制家居网',
+    type: 'WEB',
+    url: 'http://www.cchome.com.cn/news/',
+    config: JSON.stringify({
+      listSelector: '.news-list li',
+      itemSelector: {
+        title: 'a',
+        link: 'a',
+        date: 'span.date',
+        summary: 'p',
+      },
+      detailSelector: {
+        content: '.article-content, .content',
+        filter: '.ad, .advertisement, .related-read, script, style',
+      },
+    }),
+    category: 'market',
+    priority: 8,
+  },
+  {
+    name: 'Google News-家居建材技术',
+    type: 'RSS',
+    url: 'https://news.google.com/rss/search?q=site:cnipa.gov.cn+人造板+OR+全屋定制+专利+OR+技术&hl=zh-CN&gl=CN&ceid=CN:zh-Hans',
+    config: JSON.stringify({
+      itemSelector: {
+        title: 'title',
+        link: 'link',
+        date: 'pubDate',
+        summary: 'description',
+      },
+    }),
+    category: 'technology',
+    priority: 9,
+  },
+  {
+    name: '中国建材报-科技版',
+    type: 'WEB',
+    url: 'http://www.cbmd.cn/channel/kejikeji/',
+    config: JSON.stringify({
+      listSelector: '.news-list li',
+      itemSelector: {
+        title: 'a',
+        link: 'a',
+        date: 'span.time',
+        summary: 'p.desc',
+      },
+      detailSelector: {
+        content: '.article-content, .content-detail',
+        filter: '.ad, .advertisement, .related-read, script, style',
+      },
+    }),
+    category: 'technology',
+    priority: 9,
+  },
 ]
 
 // ============================================================

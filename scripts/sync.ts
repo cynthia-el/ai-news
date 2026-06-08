@@ -317,6 +317,19 @@ const CONSUMER_KEYWORDS = [
   '后悔', '被坑', '血泪', '教训', '维权', '投诉',
 ]
 
+/** 企业创新放行关键词 — 含这些词的内容，即使含消费端词汇也不过滤 */
+const ENTERPRISE_INNOVATION_KEYWORDS = [
+  '专利', '发明专利', '实用新型', '技术突破', '技术突破',
+  '新工艺', '新材料', '新技术', '智能制造', '数字化',
+  '产线升级', '智能工厂', '柔性生产', '工业4.0',
+  'C2M', '定制系统', 'MES系统', 'ERP升级',
+  '无醛', 'ENF', '负碳', '碳中和', '绿色工厂',
+  '水性漆', '生物质胶', 'MDI胶', '大豆胶',
+  '科技成果', '技术鉴定', '产学研', '技术转化',
+  '首条', '首台', '首套', '首个', '首次应用',
+  '产能扩张', '新厂投产', '基地落成',
+]
+
 /** 个体案例/投诉类关键词 */
 const CASE_KEYWORDS = [
   '网友', '业主', '消费者', '客户', '师傅', '工人',
@@ -336,9 +349,23 @@ const AD_KEYWORDS = [
   '招商加盟', '限时优惠', '选XX就对了', '最好',
 ]
 
+/** 判断内容是否为企业创新类（用于放行） */
+function isEnterpriseInnovationContent(title: string, content: string): boolean {
+  const text = `${title} ${content || ''}`
+  for (const kw of ENTERPRISE_INNOVATION_KEYWORDS) {
+    if (text.includes(kw)) return true
+  }
+  return false
+}
+
 /** 硬过滤：消费端低质量内容一票否决 */
 function isLowQualityConsumerContent(title: string, content: string): boolean {
   const text = `${title} ${content || ''}`
+
+  // 0. 企业创新内容放行 — 即使含消费端词汇，只要涉及企业技术创新/专利/新运营，保留
+  if (isEnterpriseInnovationContent(title, content)) {
+    return false
+  }
 
   // 1. 消费端技巧类一票否决
   for (const kw of CONSUMER_KEYWORDS) {
@@ -646,6 +673,21 @@ async function processCrawledItems(rawItems: RawItem[], crawlStartTime: Date) {
     }
     if (isRealEstateOnly && finalScore > 1) {
       finalScore -= 1
+      scoreAdjusted++
+    }
+
+    // 企业创新内容额外加分：专利、新技术、智能制造、新运营模式
+    const enterpriseInnovationKeywords = [
+      '专利', '发明专利', '技术突破', '新工艺', '新材料', '新技术',
+      '智能制造', '智能工厂', '柔性生产', '数字化', 'C2M',
+      '无醛', 'ENF', '负碳', '碳中和', '绿色工厂',
+      '水性漆', '生物质胶', 'MDI胶', '大豆胶',
+      '科技成果', '技术鉴定', '产学研', '首条', '首台', '首套',
+      '产线升级', '产能扩张', '新厂投产', '基地落成',
+    ]
+    const isEnterpriseInnovation = enterpriseInnovationKeywords.some(kw => raw.title.includes(kw) || raw.content.includes(kw))
+    if (isEnterpriseInnovation && finalScore < 10) {
+      finalScore += 1.0  // 企业创新内容额外加1分，提高入选概率
       scoreAdjusted++
     }
 
