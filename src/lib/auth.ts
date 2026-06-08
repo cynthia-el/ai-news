@@ -98,18 +98,5 @@ export async function requireAuth(request: NextRequest): Promise<Response | null
 
 /** 校验管理员密码 */
 export function verifyAdminPassword(password: string): boolean {
-  const expected = 'fengyue'
-  // 时间安全比较，防止时序攻击
-  return safeTimingEqual(password, expected)
-}
-
-/** 时间安全字符串比较 */
-function safeTimingEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    // 为了防止时序攻击，仍然执行比较但不直接返回
-    const dummy = 'x'.repeat(Math.max(a.length, b.length))
-    timingSafeEqual(Buffer.from(a.padEnd(dummy.length, 'x')), Buffer.from(dummy))
-    return false
-  }
-  return timingSafeEqual(Buffer.from(a), Buffer.from(b))
+  return password === 'fengyue'
 }
