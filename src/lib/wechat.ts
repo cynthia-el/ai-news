@@ -27,7 +27,21 @@ async function wechatFetch(
     headers.set('Authorization', `Bearer ${PROXY_SECRET}`)
   }
 
-  return fetch(url, { ...init, headers })
+  console.log('[wechatFetch] request url:', url)
+  console.log('[wechatFetch] request method:', init.method || 'GET')
+  console.log('[wechatFetch] request headers:', Object.fromEntries(headers.entries()))
+
+  try {
+    const res = await fetch(url, { ...init, headers })
+    const cloned = res.clone()
+    const text = await cloned.text()
+    console.log('[wechatFetch] response status:', res.status)
+    console.log('[wechatFetch] response body:', text.slice(0, 1000))
+    return res
+  } catch (err) {
+    console.error('[wechatFetch] fetch error:', (err as Error).message)
+    throw err
+  }
 }
 
 interface WeChatTokenResponse {
@@ -117,8 +131,10 @@ async function getAccessToken(config: WeChatConfigWithSecret): Promise<string> {
   }
 
   const url = `${WECHAT_API_BASE}/token?grant_type=client_credential&appid=${config.appId}&secret=${config.appSecret}`
+  console.log('[getAccessToken] wechat url:', url)
   const res = await wechatFetch(config, url)
   const data = (await res.json()) as WeChatTokenResponse
+  console.log('[getAccessToken] parsed data:', data)
 
   if (!data.access_token) {
     throw new Error(`获取微信 access_token 失败: ${data.errmsg || '未知错误'} (${data.errcode})`)
