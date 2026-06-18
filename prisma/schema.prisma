@@ -110,3 +110,20 @@ model DingTalkWebhook {
 
   @@index([isActive])
 }
+
+model WeChatConfig {
+  id            String   @id @default(cuid())
+  name          String   @default("微信公众号") // 配置名称，方便识别
+  appId         String   // 微信公众号 AppID
+  appSecret     String   // 微信公众号 AppSecret（加密存储）
+  thumbMediaId  String?  // 默认封面图素材ID
+  proxyUrl      String?  // Cloudflare Worker 代理地址，例如 https://xxx.workers.dev/proxy
+  accountType   String   @default("SUBSCRIPTION") // SUBSCRIPTION 订阅号，SERVICE 服务号
+  isActive      Boolean  @default(true)
+  lastPushedAt  DateTime?
+  lastError     String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([isActive])
+}
