@@ -204,9 +204,9 @@ export class WebAdapter implements SourceAdapter {
           }
 
           // keywords 过滤：如果配置了关键词，标题必须包含至少一个
-          if (cfg.keywords && Array.isArray(cfg.keywords) && cfg.keywords.length > 0) {
+          if (cfg.keywords && cfg.keywords.length > 0) {
             const text = (titleClean + ' ' + summary).toLowerCase()
-            const matched = cfg.keywords.some((kw: string) => text.includes(kw.toLowerCase()))
+            const matched = cfg.keywords.some((kw) => text.includes(kw.toLowerCase()))
             if (!matched) return
           }
 

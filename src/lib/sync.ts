@@ -6,8 +6,28 @@ import { RawItem } from '@/lib/sources/types'
 
 const BATCH_SIZE = 1
 
+/** 目标行业核心关键词：人造板、全屋定制及相关战略信号 */
+const RELEVANCE_KEYWORDS = [
+  // 人造板产业链
+  '人造板', '刨花板', '胶合板', '纤维板', 'OSB', '饰面板', '板材',
+  'ENF', '甲醛', '无醛', 'MDI胶', '大豆胶', '压贴', '饰面',
+  '林业', '木材', '木业', '胶粘剂',
+  // 全屋定制
+  '全屋定制', '定制家居', '整木定制', '整装', '高定',
+  '橱柜', '衣柜', '木门', '定制家具',
+  '柔性生产', 'C2M', '柔性制造',
+  // 战略/竞品/产能信号
+  '产能', '产线', '投产', '扩产', '产能利用率', '工厂',
+  '并购', '收购', '战略合作', '合资',
+  '财报', '营收', '净利润', '毛利率',
+  '门店', '开店', '关店', '经销商', '渠道',
+  '出海', '出口', '反倾销', '关税', '国际贸易',
+  // 政策/标准
+  '以旧换新', '绿色建筑', '双碳', '碳中和', '绿色建材',
+]
+
 /** 消费端低质量内容硬过滤 */
-function isLowQualityConsumerContent(title: string, content: string): boolean {
+function isLowQualityConsumerContent(title: string): boolean {
   const consumerKeywords = [
     '避坑', '翻车', '技巧', '攻略', '教程', '怎么选', '多少钱',
     '如何选', '手把手', '新手', '小白', '踩雷', '智商税',
@@ -36,24 +56,40 @@ function isLowQualityConsumerContent(title: string, content: string): boolean {
   return false
 }
 
+/** 标题+正文必须至少命中一个目标行业关键词 */
+function isRelevantContent(title: string, content: string): boolean {
+  const text = `${title} ${content}`.toLowerCase()
+  return RELEVANCE_KEYWORDS.some((kw) => text.includes(kw.toLowerCase()))
+}
+
 async function processCrawledItems(rawItems: RawItem[]) {
   let added = 0
   let skipped = 0
   let failed = 0
   let consumerFiltered = 0
+  let relevanceFiltered = 0
 
   console.log(`[Cron] 去重: 原始 ${rawItems.length} 条`)
   const { unique } = dedupItems(rawItems)
   console.log(`[Cron] 去重后: ${unique.length} 条`)
 
   const afterHardFilter = unique.filter((item) => {
-    if (isLowQualityConsumerContent(item.title, item.content)) {
+    if (isLowQualityConsumerContent(item.title)) {
       consumerFiltered++
       return false
     }
     return true
   })
   console.log(`[Cron] 硬过滤后: ${afterHardFilter.length} 条 (排除 ${consumerFiltered} 条低质量)`)
+
+  const afterRelevanceFilter = afterHardFilter.filter((item) => {
+    if (!isRelevantContent(item.title, item.content)) {
+      relevanceFiltered++
+      return false
+    }
+    return true
+  })
+  console.log(`[Cron] 相关性过滤后: ${afterRelevanceFilter.length} 条 (排除 ${relevanceFiltered} 条不相关)`)
 
   const sources = await loadActiveSources()
   const sourceMap = new Map<string, string>()
@@ -68,8 +104,8 @@ async function processCrawledItems(rawItems: RawItem[]) {
     tags: string[]
   }[] = []
 
-  for (let i = 0; i < afterHardFilter.length; i += BATCH_SIZE) {
-    const batch = afterHardFilter.slice(i, i + BATCH_SIZE)
+  for (let i = 0; i < afterRelevanceFilter.length; i += BATCH_SIZE) {
+    const batch = afterRelevanceFilter.slice(i, i + BATCH_SIZE)
     try {
       const batchResults = await batchClassify(
         batch.map((item) => ({ title: item.title, content: item.content, source: item.source, publishedAt: item.publishedAt }))
@@ -80,7 +116,7 @@ async function processCrawledItems(rawItems: RawItem[]) {
           allResults.push({ raw: batch[j], ...result })
         }
       }
-      if (i + BATCH_SIZE < afterHardFilter.length) await new Promise((r) => setTimeout(r, 3000))
+      if (i + BATCH_SIZE < afterRelevanceFilter.length) await new Promise((r) => setTimeout(r, 3000))
     } catch (error) {
       console.error(`[Cron] 批次失败:`, (error as Error).message)
       for (const item of batch) {
@@ -156,13 +192,13 @@ async function processCrawledItems(rawItems: RawItem[]) {
       })
       added++
       sourceStats[raw.source].added++
-    } catch (error) {
+    } catch {
       failed++
       sourceStats[raw.source].failed++
     }
   }
 
-  return { added, skipped, failed, consumerFiltered, sourceStats }
+  return { added, skipped, failed, consumerFiltered, relevanceFiltered, sourceStats }
 }
 
 async function generateDaily() {
@@ -170,23 +206,38 @@ async function generateDaily() {
   const yesterday = new Date()
   yesterday.setDate(yesterday.getDate() - 1)
 
+  const TARGET_TAGS = ['人造板', '全屋定制']
+  const MIN_TARGET_ITEMS = 3
+  const MAX_ITEMS = 10
+
   const items = await prisma.item.findMany({
     where: { isSelected: true, publishedAt: { gte: yesterday } },
     orderBy: { score: 'desc' },
-    take: 10,
+    take: 50,
   })
 
-  if (items.length === 0) {
+  const targetItems = items.filter((item) =>
+    item.tags.some((tag) => TARGET_TAGS.includes(tag))
+  )
+  const otherItems = items.filter(
+    (item) => !item.tags.some((tag) => TARGET_TAGS.includes(tag))
+  )
+
+  const selectedItems = targetItems.length >= MIN_TARGET_ITEMS
+    ? targetItems.slice(0, MAX_ITEMS)
+    : [...targetItems, ...otherItems].slice(0, MAX_ITEMS)
+
+  if (selectedItems.length === 0) {
     console.log('[Cron] 今日无精选内容，跳过日报')
     return false
   }
 
   const dailyResult = await generateDailyWithSections(
-    items.map((item) => ({ title: item.title, summary: item.summary || item.title, category: item.category, tags: item.tags }))
+    selectedItems.map((item) => ({ title: item.title, summary: item.summary || item.title, category: item.category, tags: item.tags }))
   )
 
-  const categoryGroups: Record<string, typeof items> = {}
-  for (const item of items) {
+  const categoryGroups: Record<string, typeof selectedItems> = {}
+  for (const item of selectedItems) {
     if (!categoryGroups[item.category]) categoryGroups[item.category] = []
     categoryGroups[item.category].push(item)
   }
@@ -212,14 +263,14 @@ async function generateDaily() {
     await prisma.dailySection.deleteMany({ where: { dailyId: exists.id } })
     await prisma.daily.update({
       where: { id: exists.id },
-      data: { title: dailyResult.title, summary: dailyResult.summary, editorNote: dailyResult.editorNote, itemIds: items.map((i) => i.id), sectionCount: sectionsData.length },
+      data: { title: dailyResult.title, summary: dailyResult.summary, editorNote: dailyResult.editorNote, itemIds: selectedItems.map((i) => i.id), sectionCount: sectionsData.length },
     })
     for (const section of sectionsData) {
       await prisma.dailySection.create({ data: { dailyId: exists.id, ...section } })
     }
   } else {
     const daily = await prisma.daily.create({
-      data: { date: today, title: dailyResult.title, summary: dailyResult.summary, editorNote: dailyResult.editorNote, itemIds: items.map((i) => i.id), sectionCount: sectionsData.length },
+      data: { date: today, title: dailyResult.title, summary: dailyResult.summary, editorNote: dailyResult.editorNote, itemIds: selectedItems.map((i) => i.id), sectionCount: sectionsData.length },
     })
     for (const section of sectionsData) {
       await prisma.dailySection.create({ data: { dailyId: daily.id, ...section } })
@@ -233,7 +284,7 @@ async function doSync(logId: string) {
   console.log(`[Cron] 同步任务开始: ${new Date().toLocaleString('zh-CN')}`)
 
   let rawItems: RawItem[] = []
-  let result = { added: 0, skipped: 0, failed: 0, consumerFiltered: 0, sourceStats: {} as Record<string, { fetched: number; added: number; failed: number }> }
+  let result = { added: 0, skipped: 0, failed: 0, consumerFiltered: 0, relevanceFiltered: 0, sourceStats: {} as Record<string, { fetched: number; added: number; failed: number }> }
   let dailyGenerated = false
   let errorMessage: string | null = null
 

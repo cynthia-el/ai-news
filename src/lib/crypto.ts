@@ -6,6 +6,11 @@
  */
 
 import crypto from 'crypto'
+import { config } from 'dotenv'
+import { resolve } from 'path'
+
+// 加载 .env.local 环境变量
+config({ path: resolve(process.cwd(), '.env.local') })
 
 const ALGORITHM = 'aes-256-gcm'
 const IV_LENGTH = 16 // 128-bit

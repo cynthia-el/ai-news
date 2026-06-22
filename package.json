@@ -26,6 +26,7 @@
     "@prisma/adapter-neon": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "cheerio": "^1.0.0",
+    "dotenv": "^17.4.2",
     "iconv-lite": "^0.7.2",
     "jose": "^6.2.3",
     "next": "15.5.18",

@@ -307,6 +307,35 @@ function isJunkText(text: string): boolean {
 const BATCH_SIZE = 1
 
 // ============================================================
+// 目标行业硬相关性门槛
+// ============================================================
+
+const RELEVANCE_KEYWORDS = [
+  // 人造板产业链
+  '人造板', '刨花板', '胶合板', '纤维板', 'OSB', '饰面板', '板材',
+  'ENF', '甲醛', '无醛', 'MDI胶', '大豆胶', '压贴', '饰面',
+  '林业', '木材', '木业', '胶粘剂',
+  // 全屋定制
+  '全屋定制', '定制家居', '整木定制', '整装', '高定',
+  '橱柜', '衣柜', '木门', '定制家具',
+  '柔性生产', 'C2M', '柔性制造',
+  // 战略/竞品/产能信号
+  '产能', '产线', '投产', '扩产', '产能利用率', '工厂',
+  '并购', '收购', '战略合作', '合资',
+  '财报', '营收', '净利润', '毛利率',
+  '门店', '开店', '关店', '经销商', '渠道',
+  '出海', '出口', '反倾销', '关税', '国际贸易',
+  // 政策/标准
+  '以旧换新', '绿色建筑', '双碳', '碳中和', '绿色建材',
+]
+
+/** 标题+正文必须至少命中一个目标行业关键词 */
+function isRelevantContent(title: string, content: string): boolean {
+  const text = `${title} ${content}`.toLowerCase()
+  return RELEVANCE_KEYWORDS.some((kw) => text.includes(kw.toLowerCase()))
+}
+
+// ============================================================
 // 硬过滤规则 — 消费端低质量内容一票否决
 // ============================================================
 
@@ -427,6 +456,7 @@ async function processCrawledItems(rawItems: RawItem[], crawlStartTime: Date) {
   let failed = 0
   let consumerFiltered = 0
   let adFiltered = 0
+  let relevanceFiltered = 0
 
   console.log(`\n[去重] 原始资讯 ${rawItems.length} 条`)
   const { unique } = dedupItems(rawItems)
@@ -446,13 +476,23 @@ async function processCrawledItems(rawItems: RawItem[], crawlStartTime: Date) {
   })
   console.log(`[硬过滤] 消费端低质量内容: ${consumerFiltered} 条, 广告/招商: ${adFiltered} 条, 保留: ${afterHardFilter.length} 条`)
 
+  // 新增：目标行业相关性硬过滤
+  const afterRelevanceFilter = afterHardFilter.filter((item) => {
+    if (!isRelevantContent(item.title, item.content)) {
+      relevanceFiltered++
+      return false
+    }
+    return true
+  })
+  console.log(`[相关性过滤] 排除 ${relevanceFiltered} 条不相关，保留 ${afterRelevanceFilter.length} 条`)
+
   const now = new Date()
   const cutoff72h = new Date(now.getTime() - 72 * 60 * 60 * 1000)
   const futureCutoff = new Date(now.getTime() + 24 * 60 * 60 * 1000)
   const currentYear = now.getFullYear()
 
   let yearFiltered = 0
-  const afterYearCheck = afterHardFilter.filter((item) => {
+  const afterYearCheck = afterRelevanceFilter.filter((item) => {
     const title = item.title
     const url = item.url
 
@@ -763,7 +803,7 @@ async function processCrawledItems(rawItems: RawItem[], crawlStartTime: Date) {
   }
 
   console.log(`\n处理结果: 新增 ${added} 条, 跳过 ${skipped} 条, 失败 ${failed} 条`)
-  return { added, skipped, failed, consumerFiltered, adFiltered, sourceStats }
+  return { added, skipped, failed, consumerFiltered, adFiltered, relevanceFiltered, sourceStats }
 }
 
 async function generateDaily() {
@@ -773,24 +813,39 @@ async function generateDaily() {
   const yesterday = new Date()
   yesterday.setDate(yesterday.getDate() - 1)
 
+  const TARGET_TAGS = ['人造板', '全屋定制']
+  const MIN_TARGET_ITEMS = 3
+  const MAX_ITEMS = 10
+
   const items = await prisma.item.findMany({
     where: {
       isSelected: true,
       publishedAt: { gte: yesterday },
     },
     orderBy: { score: 'desc' },
-    take: 10,
+    take: 50,
   })
 
-  if (items.length === 0) {
+  const targetItems = items.filter((item) =>
+    item.tags.some((tag) => TARGET_TAGS.includes(tag))
+  )
+  const otherItems = items.filter(
+    (item) => !item.tags.some((tag) => TARGET_TAGS.includes(tag))
+  )
+
+  const selectedItems = targetItems.length >= MIN_TARGET_ITEMS
+    ? targetItems.slice(0, MAX_ITEMS)
+    : [...targetItems, ...otherItems].slice(0, MAX_ITEMS)
+
+  if (selectedItems.length === 0) {
     console.log('  ⚠ 今日无精选内容，跳过日报生成')
     return false
   }
 
-  console.log(`  找到 ${items.length} 条精选内容`)
+  console.log(`  找到 ${selectedItems.length} 条精选内容（目标行业 ${targetItems.length} 条）`)
 
   const dailyResult = await generateDailyWithSections(
-    items.map((item) => ({
+    selectedItems.map((item) => ({
       title: item.title,
       summary: item.summary || item.title,
       category: item.category,
@@ -798,8 +853,8 @@ async function generateDaily() {
     }))
   )
 
-  const categoryGroups: Record<string, typeof items> = {}
-  for (const item of items) {
+  const categoryGroups: Record<string, typeof selectedItems> = {}
+  for (const item of selectedItems) {
     if (!categoryGroups[item.category]) categoryGroups[item.category] = []
     categoryGroups[item.category].push(item)
   }
@@ -841,7 +896,7 @@ async function generateDaily() {
         title: dailyResult.title,
         summary: dailyResult.summary,
         editorNote: dailyResult.editorNote,
-        itemIds: items.map((item) => item.id),
+        itemIds: selectedItems.map((item) => item.id),
         sectionCount: sectionsData.length,
       },
     })
@@ -867,7 +922,7 @@ async function generateDaily() {
         title: dailyResult.title,
         summary: dailyResult.summary,
         editorNote: dailyResult.editorNote,
-        itemIds: items.map((item) => item.id),
+        itemIds: selectedItems.map((item) => item.id),
         sectionCount: sectionsData.length,
       },
     })
@@ -921,7 +976,7 @@ async function main() {
 
   const crawlStartTime = new Date()
   let rawItems: RawItem[] = []
-  let result = { added: 0, skipped: 0, failed: 0, consumerFiltered: 0, adFiltered: 0, sourceStats: {} as Record<string, { fetched: number; added: number; failed: number }> }
+  let result = { added: 0, skipped: 0, failed: 0, consumerFiltered: 0, adFiltered: 0, relevanceFiltered: 0, sourceStats: {} as Record<string, { fetched: number; added: number; failed: number }> }
   let dailyGenerated = false
   let errorMessage: string | null = null
 
@@ -980,6 +1035,7 @@ async function main() {
     console.log(`  爬取资讯: ${rawItems.length} 条`)
     console.log(`  消费端过滤: ${result.consumerFiltered} 条`)
     console.log(`  广告/招商过滤: ${result.adFiltered} 条`)
+    console.log(`  相关性过滤: ${result.relevanceFiltered} 条`)
     console.log(`  新增入库: ${result.added} 条`)
     console.log(`  重复跳过: ${result.skipped} 条`)
     console.log(`  处理失败: ${result.failed} 条`)

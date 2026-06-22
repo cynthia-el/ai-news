@@ -1,5 +1,5 @@
 import * as cheerio from 'cheerio'
-import { RawItem, SourceAdapter, SourceConfig } from '../types'
+import { RawItem, SourceAdapter } from '../types'
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -28,6 +28,16 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout 
 export class RssAdapter implements SourceAdapter {
   async crawl(source: { name: string; url: string; config: string | null }): Promise<RawItem[]> {
     const items: RawItem[] = []
+
+    let keywords: string[] = []
+    try {
+      const cfg = source.config ? JSON.parse(source.config) : {}
+      if (cfg.keywords && Array.isArray(cfg.keywords)) {
+        keywords = cfg.keywords.map((k: string) => k.toLowerCase())
+      }
+    } catch {
+      keywords = []
+    }
 
     try {
       const response = await fetchWithTimeout(source.url)
@@ -71,6 +81,13 @@ export class RssAdapter implements SourceAdapter {
               link = decodeURIComponent(realUrl)
             }
           } catch { /* 解析失败保留原链接 */ }
+        }
+
+        // keywords 过滤：配置了 keywords 时标题或摘要必须命中至少一个
+        if (keywords.length > 0) {
+          const text = `${title} ${summaryText}`.toLowerCase()
+          const matched = keywords.some((kw) => text.includes(kw))
+          if (!matched) return
         }
 
         let parsedDate: Date | null = null

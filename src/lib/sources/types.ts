@@ -28,6 +28,7 @@ export interface SourceConfig {
   responsePath?: string
   // For all sources
   dateFormat?: string
+  keywords?: string[]
 }
 
 export interface CrawlResult {
